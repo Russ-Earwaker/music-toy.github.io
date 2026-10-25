@@ -1,4 +1,5 @@
 import {decorateCircularControl} from './circular-control.js';
+import {simplePaintState} from './simple-paint-state.js';
 import {uiMode} from './ui-mode.js';
 import {expressiveControl,setExpressiveControlsVisible,isExpressiveContainer,arrangeExpressiveSecondaryControls} from './expressive-toy-chrome.js';
 // Minimal foundation UI: choose a connected selection, Open (non-destructive),
@@ -46,13 +47,14 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
    }
    if(card.parentElement!==world)world.append(card);
    const open=c.presentation.state.open;
+   if(c.presentation.type==='simple-draw')card.dataset.paintState=simplePaintState(!!c.interactionData?.gesture&&!!c.internalObjectIds.length).state;
    Object.assign(card.style,{left:c.bounds.x+'px',top:c.bounds.y+'px',width:(open?280:c.bounds.width)+'px',minHeight:(open?140:c.bounds.height)+'px'});card.dataset.open=String(open);
    card.style.setProperty('--simple-draw-height',c.bounds.height+'px');
    const expressive=isExpressiveContainer(c.presentation.type),label=c.presentation.type==='simple-bouncer'?'Simple Bouncer':c.presentation.type==='simple-draw'?'Simple Draw':'Container';
    card.dataset.presentation=c.presentation.type;card.classList.toggle('expressive-toy',expressive);card.querySelector('.container-title').textContent=label;card.setAttribute('aria-label',label);
    const handle=card.querySelector('.simple-container-handle');handle.hidden=!expressive;handle.setAttribute('aria-label',label+' controls');
    card.querySelector('[data-container-action="delete"]').hidden=expressive;
-   card.querySelector('.container-surface').hidden=open;
+   card.querySelector('.container-surface').hidden=open||['EMPTY_IDLE','DRAW_ACTIVE'].includes(card.dataset.paintState);
    card.querySelector('[data-container-action="expand"]').disabled=!c.internalObjectIds.length;
    const openButton=card.querySelector('[data-container-action="open"]');openButton.setAttribute('aria-label',open?'Close':'Open');openButton.title=open?'Close — return to the drawing':'Open — inspect the contained graph';card.querySelector('[data-container-action="expand"]').title='Expand onto Board — remove the wrapper and reveal its toys';
    card.querySelector('.container-summary').textContent=`${c.internalObjectIds.length} objects · ${containers.durationOf(c.id)} ticks`;

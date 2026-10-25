@@ -12,11 +12,11 @@ import {createTickTransport} from '../src/tick-transport.js';
 import {simulateThrow} from '../src/simple-bouncer-physics.js';
 import {boardCollisionBody} from '../src/board-collision-body.js';
 function fixture(period=1){
- const objects=createDrumObjects(),context={currentTime:0,state:'running'},events=[],hits=[],cancelled=[],released=[];let connected=true,controller;
- const t=createTickTransport({id:'main',getContext:()=>context,emit:e=>controller?.transportChanged('main',e.type,e.fromState)});
+ const objects=createDrumObjects(),context={currentTime:0,state:'running'},events=[],hits=[],cancelled=[],released=[],plays=[];let connected=true,controller;
+ const t=createTickTransport({id:'main',getContext:()=>context,emit:e=>{if(e.type==='play')plays.push({tick:e.positionTick,notes:objects.list().reduce((sum,o)=>sum+o.authoredState.pattern.authoredNotes.length,0)});controller?.transportChanged('main',e.type,e.fromState);}});
  controller=createDrumLoopController({objects,getTransport:()=>connected?t:null,schedule:e=>events.push(e),cancel:id=>cancelled.push(id),release:id=>released.push(id)});controller.subscribe(e=>hits.push(e));
  const drum=objects.create({periodLoops:period,instrument:'DRUM SNARE 1'});
- return {objects,drum,t,context,events,hits,cancelled,released,controller,at(tick){context.currentTime=t.tickToAudioTime(tick);controller.tick();},connect(v){connected=v;controller.tick();}};
+ return {objects,drum,t,context,events,hits,cancelled,released,plays,controller,at(tick){context.currentTime=t.tickToAudioTime(tick);controller.tick();},connect(v){connected=v;controller.tick();}};
 }
 test('Drum Set is six ordinary well-spaced receivers with existing percussion assignments',()=>{
  const objects=createDrumObjects(),kit=createDrumSet(objects,{x:1000,y:-500});assert.equal(kit.length,6);assert.equal(new Set(kit.map(o=>o.id)).size,6);
@@ -63,7 +63,7 @@ test('swept Ball circle collision retains receiver policy and survives very high
  for(const vx of [840,100000]){const capture=simulateThrow({cubes:[body],launch:{x:0,y:0,vx,vy:0}});assert.equal(capture.collisions[0].cubeId,f.drum.id);assert.equal(capture.collisions[0].receiverCapabilities.triggerReceiver.soundSource,'receiver');assert.ok(capture.trajectory.some(p=>Math.abs(p.x-235)<1e-5));}
 });
 test('tapped generic playable and triggered activation share sound and feedback with manual-only recording',async()=>{
- const f=fixture();const playable=createBoardPlayableController({objects:f.objects,getTime:()=>0,perform:e=>{void f.controller.activate(e.sourceId);}});playable.activate(f.drum.id);await f.t.play();await Promise.resolve();f.controller.trigger({receiverId:f.drum.id,when:f.t.tickToAudioTime(96)});
+ const f=fixture();let admission;const playable=createBoardPlayableController({objects:f.objects,getTime:()=>0,perform:e=>{admission=f.controller.activate(e.sourceId);}});playable.activate(f.drum.id);await admission;f.controller.trigger({receiverId:f.drum.id,when:f.t.tickToAudioTime(96)});
  f.at(96);assert.deepEqual(f.events.map(e=>e.eventTick),[48,96]);assert.equal(f.hits.length,2);assert.deepEqual(f.objects.get(f.drum.id).authoredState.pattern.authoredNotes.map(n=>n.col),[1]);playable.destroy();
 });
 test('save/reload preserves period/pattern, omits runtime feedback, deletion releases only one Drum',async()=>{
@@ -142,4 +142,14 @@ test('Clear retains a quantised transient hit already waiting to sound',async()=
 test('manual admission after a transient at the same tick records once and promotes marker feedback',async()=>{
  const f=fixture();await f.t.play();await f.controller.trigger({receiverId:f.drum.id,when:f.t.tickToAudioTime(48)});await f.controller.activate(f.drum.id);f.at(48);
  assert.equal(f.events.length,1);assert.equal(f.hits[0].activationSource,'manual');assert.equal(f.objects.get(f.drum.id).authoredState.pattern.authoredNotes.length,1);
+});
+
+test('manual Drum admission records before autoplay, preserves phase/BPM and never restarts a running transport',async()=>{
+ const f=fixture();f.t.setBpm(137);f.t.seekTick(121);assert.equal(f.plays.length,0);await f.controller.activate(f.drum.id);
+ assert.equal(f.t.state,'playing');assert.deepEqual(f.plays,[{tick:121,notes:1}]);assert.equal(f.t.bpm,137);assert.equal(f.t.currentTick,121);assert.equal(f.events[0].eventTick,144);
+ await f.controller.activate(f.drum.id);assert.equal(f.plays.length,1);assert.equal(f.events.length,1);assert.equal(f.objects.get(f.drum.id).authoredState.pattern.authoredNotes.length,1);
+ f.t.pause();const pattern=structuredClone(f.objects.get(f.drum.id).authoredState.pattern);await f.controller.trigger({receiverId:f.drum.id,when:f.t.tickToAudioTime(192)});assert.equal(f.t.state,'paused');assert.equal(f.plays.length,1);assert.deepEqual(f.objects.get(f.drum.id).authoredState.pattern,pattern);f.controller.destroy();
+});
+test('a triggered Drum hit while stopped cannot start playback or author a pattern',async()=>{
+ const f=fixture();await f.controller.trigger({receiverId:f.drum.id,when:0});assert.equal(f.t.state,'stopped');assert.equal(f.plays.length,0);assert.equal(f.events.length,1);assert.equal(f.events[0].activationSource,'trigger');assert.equal(f.objects.get(f.drum.id).authoredState.pattern.authoredNotes.length,0);f.controller.destroy();
 });

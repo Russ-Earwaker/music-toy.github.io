@@ -9,10 +9,11 @@ import {installTapOrDrag} from './tap-or-drag.js';
 import {DRUM_SIZE} from './simple-drum.js';
 import {createDrumSet} from './simple-drum-set.js';
 import {triggerCreationPoint} from './trigger-starter-cubes.js';
+import {createBoardInteractionHint,SIMPLE_PLACE_HINT_DELAY} from './simple-interaction-hint.js';
 
 export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,screenToWorld,unlock,getPlacementBounds,canInteract=()=>true,onArm=()=>{},onDirty=()=>{}}){
  const root=document.createElement('div');root.className='simple-drum-layer';getWorld().append(root);
- const cards=new Map();let armed=false,placement=null,frame;
+ const cards=new Map();let armed=false,placement=null,frame,teaching=null;
  function positionControls(card){
   if(card.dataset.controlsVisible!=='1')return;
   const controls=card.querySelector('.simple-drum-controls');controls.style.top='118px';controls.style.bottom='auto';controls.style.left='0px';
@@ -20,8 +21,8 @@ export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,
   if(rect.bottom>window.innerHeight-16){controls.style.top='auto';controls.style.bottom='calc(100% + 18px)';}
   if(rect.right>window.innerWidth-16)controls.style.left=(window.innerWidth-16-rect.right)/scale+'px';
  }
- function cancel(){armed=false;placement=null;document.body.classList.remove('simple-drum-armed');}
- function arm(){if(!canInteract())return false;onArm();armed=!armed;document.body.classList.toggle('simple-drum-armed',armed);return armed;}
+ function cancel(){armed=false;placement=null;teaching?.dispose();teaching=null;document.body.classList.remove('simple-drum-armed');}
+ function arm(){if(!canInteract())return false;onArm();armed=!armed;teaching?.dispose();teaching=null;if(armed)teaching=createBoardInteractionHint({getWorld,getViewport,screenToWorld,label:'PLACE',demo:'tap',delay:objects.list().length?SIMPLE_PLACE_HINT_DELAY:0});document.body.classList.toggle('simple-drum-armed',armed);return armed;}
  async function play(id){
   await unlock();if(objects.get(id))controller.activate(id);
  }
@@ -78,8 +79,9 @@ export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,
  }
  const down=e=>{
   if(e.target.closest?.('.toy-spawner-art,.toy-spawner-logic,.toy-spawner-game,.palette-handle')){cancel();return;}
+  if(armed&&e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.container-toy,.heartbeat-toy,.simple-ripple-object,.simple-drum-object')){teaching?.dispose();teaching=null;}
   if(!armed||!canInteract()||e.button>0||placement||!getViewport().contains(e.target)||e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.container-toy,.heartbeat-toy,.simple-ripple-object,.simple-drum-object'))return;
-  e.preventDefault();e.stopImmediatePropagation();placement={pointerId:e.pointerId,x:e.clientX,y:e.clientY};getViewport().setPointerCapture?.(e.pointerId);
+  teaching?.dispose();teaching=null;e.preventDefault();e.stopImmediatePropagation();placement={pointerId:e.pointerId,x:e.clientX,y:e.clientY};getViewport().setPointerCapture?.(e.pointerId);
  };
  const up=e=>{
   if(e.pointerId!==placement?.pointerId)return;const p=placement;placement=null;e.preventDefault();e.stopImmediatePropagation();

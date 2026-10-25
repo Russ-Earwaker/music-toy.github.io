@@ -32,7 +32,7 @@ export function createBoardPhysicalObjects(){
   if(!Array.isArray(saved))throw Error('Invalid physical objects');const next=new Map();
   for(const o of saved){if(!o||typeof o.id!=='string'||next.has(o.id)||!['cube','ball'].includes(o.kind)||![o.x,o.y].every(Number.isFinite))throw Error('Invalid physical object');
    if(o.kind==='cube'&&(![o.width,o.height,o.sourceMidi].every(Number.isFinite)||o.width<=0||o.height<=0))throw Error('Invalid physical cube');
-   if(o.kind==='ball'&&(!Number.isFinite(o.radius)||o.radius<=0))throw Error('Invalid physical ball');next.set(o.id,o.kind==='cube'?pitchSurface(structuredClone(o)):structuredClone(o));
+   if(o.kind==='ball'&&(!Number.isFinite(o.radius)||o.radius<=0||(o.ballMode!=null&&!['normal','gravity'].includes(o.ballMode))))throw Error('Invalid physical ball');next.set(o.id,o.kind==='cube'?pitchSurface(structuredClone(o)):structuredClone(o));
   }
   records.clear();runtime.clear();for(const [id,o]of next){delete o.boardObject;
    for(const key of ['motion','captureId','captureToyId','glow','collisionFlash','hover','animationPhase','drag'])delete o[key];

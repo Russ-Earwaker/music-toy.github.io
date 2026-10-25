@@ -12,7 +12,7 @@ export function installSimpleBouncerSurface(host,{controller,id,arm,screenToWorl
  const controls=document.createElement('div');controls.className='simple-bouncer-controls';host.append(controls);
  const ball=decorateCircularControl(document.createElement('button'),{label:'Ball',icon:'throw'}),cube=decorateCircularControl(document.createElement('button'),{label:'Cube',icon:'cube'});
  for(const [button,label]of [[ball,'Ball'],[cube,'Cube']]){const caption=document.createElement('span');caption.className='cannon-tool-label';caption.textContent=label;button.append(caption);}
- ball.dataset.toyType='physical-ball';cube.dataset.toyType='physical-cube';ball.onclick=()=>arm({mode:'ball',seed:false});cube.onclick=()=>arm({mode:'cube',seed:false});controls.append(ball,cube);
+ ball.dataset.toyType='physical-ball';cube.dataset.toyType='physical-cube';ball.onclick=()=>arm({mode:controller.data(id)?.ballMode==='gravity'?'gravity':'ball',seed:false});cube.onclick=()=>arm({mode:'cube',seed:false});controls.append(ball,cube);
  const instrument=decorateCircularControl(document.createElement('button'),{label:'Choose cannon instrument',asset:'T_ButtonInstruments'});controls.append(instrument);
  const instrumentName=document.createElement('span');instrumentName.className='cannon-instrument-name';instrument.append(instrumentName);
  let choosing=false;
@@ -28,6 +28,7 @@ export function installSimpleBouncerSurface(host,{controller,id,arm,screenToWorl
  });
  let active=false,disposed=false,frame;
  function draw(){if(disposed||!controller.data(id))return;const d=controller.data(id),c=controller.cannon(id);if(!c)return;
+  card.dataset.ballMode=d.ballMode||'normal';if(d.ballMode==='gravity'){card.setAttribute('aria-label','Gravity Cannon');card.querySelector('.simple-container-handle')?.setAttribute('aria-label','Gravity Cannon controls');}const ballLabel=d.ballMode==='gravity'?'Gravity Ball':'Ball';ball.setAttribute('aria-label',ballLabel);ball.title=ballLabel;ball.querySelector('.cannon-tool-label').textContent=ballLabel;ball.dataset.toyType=d.ballMode==='gravity'?'physical-gravity-ball':'physical-ball';ball.classList.toggle('gravity-ball-tool',d.ballMode==='gravity');muzzle.setAttribute('aria-label',d.ballMode==='gravity'?'Aim gravity cannon':'Aim cannon');
   barrel.style.transform=`rotate(${Math.atan2(c.direction.y,c.direction.x)}rad)`;barrel.style.setProperty('--barrel-length',CANNON_BARREL_LENGTH+'px');
   bars.value=String(d.bars);const name=getDisplayNameForId(d.instrument)||d.instrument;instrument.title=`Choose Instrument: ${name}`;instrumentName.textContent=name;card.dataset.instrument=d.instrument;
  }

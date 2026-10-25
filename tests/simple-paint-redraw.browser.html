@@ -1,0 +1,87 @@
+<!doctype html><meta charset="utf-8"><title>Paint clear and free-board redraw</title>
+<link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../expressive-layout.css"><link rel="stylesheet" href="../free-play.css">
+<style>body{margin:0;background:#10232d;color:white}#viewport{position:relative;width:1200px;height:800px;overflow:hidden}#world{position:absolute;width:1600px;height:1200px;transform-origin:0 0}#results{white-space:pre-wrap}</style>
+<pre id="results">Running</pre><div id="viewport"><div id="world"></div></div>
+<script type="module">
+import {createConnectionModel} from '../src/connections.js';
+import {createContainerToyModel} from '../src/container-toys.js';
+import {createSimpleDrawController} from '../src/simple-draw.js';
+import {installSimpleDrawCreation} from '../src/simple-draw-creation.js';
+import {installSimpleDrawSurface} from '../src/simple-draw-surface.js';
+import {installContainerBoard} from '../src/container-board.js';
+import {installContainerVolumeUI} from '../src/container-volume.js';
+import {restoreAuthoredNotes,drawgridPatternFromState} from '../src/drawgrid/dg-authored-notes.js';
+import {applyFreePlayDrawGrid} from '../src/free-play-drawgrid.js';
+import {setToyVolume,setToyMuted,getToyVolumeRaw,isToyMuted} from '../src/audio-core.js';
+import {prepareBoardDrawing,drawingAuthoredBounds} from '../src/simple-draw-placement.js';
+import {setExpressiveControlsVisible} from '../src/expressive-toy-chrome.js';
+import {SIMPLE_DRAW_INSETS} from '../src/container-fit.js';
+let count=0;const check=(v,m)=>{if(!v)throw Error(m);count++;};const wait=ms=>new Promise(r=>setTimeout(r,ms));
+try{
+ const viewport=document.querySelector('#viewport'),world=document.querySelector('#world'),model=createConnectionModel(),toys=new Map(),positions=new Map(),surfaces=new Map();let serial=0,commits=0,lastPrepared,lastTarget;
+ const containers=createContainerToyModel(model,{getRect:id=>positions.get(id),setPosition:(id,x,y)=>Object.assign(positions.get(id),{x,y}),removeInternal:id=>{model.removeObject(id);toys.get(id)?.remove();toys.delete(id);positions.delete(id);}});
+ const controller=createSimpleDrawController({containers,model,getToy:id=>toys.get(id),getTransport:()=>null,publish(p){p.__seqPattern=drawgridPatternFromState({...p.__testState,authoredNotes:p.__dgAuthoredNotes});},cancelScheduled(){},removeGrid:p=>{model.removeObject(p.id);toys.delete(p.id);positions.delete(p.id);p.remove();},
+  createGrid:async(state,position)=>{const p=document.createElement('div');p.id='test-grid-'+ ++serial;p.dataset.toy='drawgrid';p.dataset.steps=state.steps;p.__testState=structuredClone(state);restoreAuthoredNotes(p,state);applyFreePlayDrawGrid(p,state.freePlay);p.__seqPattern=drawgridPatternFromState(state);model.registerObject(p.id);toys.set(p.id,p);positions.set(p.id,{...position,width:800,height:760});setToyVolume(p.id,.65);return p;},
+  readAudioSettings:p=>({volume:getToyVolumeRaw(p.id),muted:isToyMuted(p.id)}),applyAudioSettings:(p,s)=>{setToyVolume(p.id,s.volume);setToyMuted(p.id,s.muted);},
+ });
+ const creation=installSimpleDrawCreation({getViewport:()=>viewport,getWorld:()=>world,screenToWorld:p=>{const r=viewport.getBoundingClientRect();return {x:p.x-r.left,y:p.y-r.top};},
+  commit:async(prepared,{containerId}={})=>{lastPrepared=prepared;lastTarget=containerId;const c=containerId?containers.get(containerId):controller.create(prepared.bounds);await controller.drawPrepared(c.id,prepared);commits++;},
+ });
+ viewport.setPointerCapture=()=>{};viewport.hasPointerCapture=()=>false;
+ const board=installContainerBoard({containers,getWorld:()=>world,getCandidates:()=>[],onRender(){},onDirty(){},
+  mountVolume:(host,panel)=>installContainerVolumeUI(host,panel,{containers,getToy:id=>toys.get(id)}),
+  renderSurface:(id,host)=>{let surface=surfaces.get(id);if(!surface){surface=installSimpleDrawSurface(host,{lines:()=>{const l=controller.line(id);return l?[l]:[];},onNote:fn=>controller.onNote(id,fn),setSilence:controller.setSilence,setStraightened:controller.setStraightened,unlock(){},clear:()=>controller.clear(id),armDraw:()=>creation.arm({containerId:id}),isDrawing:()=>controller.isPending(id)||creation.targetId===id,
+    getGeometry:()=>{const s=controller.data(id).contentSpace;return s?{...s,x:s.x-SIMPLE_DRAW_INSETS.left,y:s.y-SIMPLE_DRAW_INSETS.top}:null;},
+   },controller.paintStore(id));surfaces.set(id,surface);}surface.setActive(true);},
+  disposeSurface:id=>{if(creation.targetId===id)creation.cancel();surfaces.get(id)?.dispose();surfaces.delete(id);controller.dispose(id);},
+ });
+ const gesture=async(points)=>{const r=viewport.getBoundingClientRect();for(let i=0;i<points.length;i++){const p=points[i];viewport.dispatchEvent(new PointerEvent(i===0?'pointerdown':i===points.length-1?'pointerup':'pointermove',{bubbles:true,pointerId:99,button:0,buttons:i===points.length-1?0:1,clientX:r.left+p.x,clientY:r.top+p.y}));}await wait(80);};
+ creation.arm();const demo=world.querySelector('.draw-onboarding');check(!demo.hidden,'first Paint shows board-space hint');
+ const label=demo.querySelector('span');check(parseFloat(getComputedStyle(label).fontSize)>42,'DRAW scaled beyond old 42px cap');
+ check(demo.getBoundingClientRect().width>540,'gesture covers larger board area');
+ const path=demo.querySelector('path'),length=path.getTotalLength();let changes=0,lastDx=0,lastDy=0;
+ for(let d=5;d<length;d+=5){const a=path.getPointAtLength(d-5),b=path.getPointAtLength(d),dx=Math.sign(b.x-a.x),dy=Math.sign(b.y-a.y);if(lastDx&&dx!==lastDx)changes++;if(lastDy&&dy!==lastDy)changes++;lastDx=dx;lastDy=dy;}
+ check(changes>=6,'expressive path changes horizontal and vertical directions');check(containers.list().length===0&&toys.size===0,'demo creates no objects or notes');
+ const first=[{x:80,y:330},{x:220,y:200},{x:360,y:390},{x:430,y:280}];await gesture(first);
+ check(commits===1&&containers.list().length===1,'first free-board gesture creates one toy');
+ const id=containers.list()[0].id,card=document.getElementById(id),handle=card.querySelector('.simple-container-handle');setExpressiveControlsVisible(card,true);
+ const authored=()=>{check(card.dataset.paintState==='AUTHORED_SCISSORS','AUTHORED state');check(card.querySelector('[data-tool="Draw"]').hidden,'authored hides Draw');check(!card.querySelector('[data-tool="Scissors"]').hidden,'authored shows Scissors');check(card.querySelector('[data-tool="Scissors"]').getAttribute('aria-pressed')==='true','Scissors auto selected');check(!card.querySelector('.free-play-random').hidden&&!card.querySelector('[data-silence-action="Scissors"]').hidden,'all three scissors actions visible');check(!card.querySelector('.simple-draw-scissors-menu,.simple-draw-scissors-anchor'),'no scissors flyout');check(!card.querySelector('[data-reset]').hidden,'authored shows Clear');check(card.querySelector('.simple-draw-canvas-controls button'),'authored shows Coil');check(!card.querySelector('.container-surface').hidden,'authored canvas visible');};
+ authored();check(card.querySelector('.art-toy-volume').parentElement===card.querySelector('[data-reset]').parentElement,'Volume and Clear share secondary row');
+ // Cutting works immediately after creation, before selecting any tool manually.
+ const canvas=card.querySelector('canvas');canvas.setPointerCapture=()=>{};
+ const firstNote=controller.line(id).source.events[1],space=controller.data(id).contentSpace,local={x:space.x-SIMPLE_DRAW_INSETS.left+firstNote.x*space.width,y:space.y-SIMPLE_DRAW_INSETS.top+firstNote.y*space.height};
+ const pointer=(type,dy)=>{const r=canvas.getBoundingClientRect();canvas.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:52,button:0,buttons:type==='pointerup'?0:1,clientX:r.left+local.x/canvas.clientWidth*r.width,clientY:r.top+(local.y+dy)/canvas.clientHeight*r.height}));};
+ pointer('pointerdown',-60);pointer('pointermove',60);check(controller.line(id).source.events.some(n=>n.id===firstNote.id&&n.scissorMuted),'default Scissors cuts live without manual tool selection');pointer('pointerup',60);
+ card.querySelector('[data-silence-action="Scissors"]').click();check(controller.line(id).source.events.every(n=>!n.scissorMuted),'always-visible Heal All still mends cuts');
+ card.querySelector('[data-tool="Scissors"]').click();check(card.querySelector('[data-tool="Scissors"]').getAttribute('aria-pressed')==='true','clicking Scissors keeps authored mode active');
+ window.dispatchEvent(new CustomEvent('toy-volume',{detail:{toyId:id,value:.31}}));window.dispatchEvent(new CustomEvent('toy-mute',{detail:{toyId:id,muted:true}}));
+ // Audio events normally also reach the app's global audio handler.
+ for(const p of controller.panels(id)){setToyVolume(p.id,.31);setToyMuted(p.id,true);}
+ const originalIds=containers.get(id).internalObjectIds,oldHandle=handle.getBoundingClientRect();card.querySelector('[data-reset]').click();
+ check(containers.get(id)?.id===id,'Clear retains toy identity');check(!controller.line(id)&&toys.size===0,'Clear removes line and all internal grids');
+ check(originalIds.every(x=>!model.getObject(x)),'no orphan old grids');check(card.dataset.paintState==='EMPTY_IDLE','EMPTY state after Clear');
+ check(card.querySelector('.container-surface').hidden,'Clear removes canvas presentation');check(!card.querySelector('[data-tool="Draw"]').hidden,'empty shows Draw');check(card.querySelector('[data-tool="Draw"]').getAttribute('aria-pressed')==='false','Draw unselected after Clear');check(card.querySelector('[data-tool="Scissors"]').hidden,'empty hides Scissors');check(card.querySelector('[data-reset]').hidden,'empty hides Clear');check(!card.querySelector('.simple-draw-canvas-controls button'),'empty has no Coil');
+ check(!creation.active&&!world.querySelector('.draw-onboarding'),'Clear does not automatically arm creation');
+ check(containers.get(id).bounds.width===280&&containers.get(id).bounds.height===140,'old canvas bounds reset');
+ check(containers.get(id).presentation.state.audioSettings.volume===.31,'Clear retains volume');check(containers.get(id).presentation.state.audioSettings.muted,'Clear retains mute');
+ const emptySaved=JSON.parse(JSON.stringify(containers.snapshot()));containers.restore(emptySaved);check(document.getElementById(id).dataset.paintState==='EMPTY_IDLE','EMPTY reload has no phantom canvas');check(containers.get(id).presentation.state.audioSettings.volume===.31,'EMPTY reload preserves audio setting');
+ card.querySelector('[data-tool="Draw"]').click();check(creation.active&&creation.targetId===id,'Draw arms same free-board creation for existing ID');check(!card.querySelector('[data-tool="Draw"]').hidden&&card.querySelector('[data-tool="Draw"]').getAttribute('aria-pressed')==='true','active Draw remains visible and selected');check(world.querySelector('.draw-onboarding'),'redraw hint on board rather than old canvas');
+ const second=[{x:740,y:480},{x:1020,y:570},{x:970,y:680},{x:790,y:650}];await gesture(second);
+ check(commits===2&&lastTarget===id&&containers.list().length===1,'redraw replaces content in same toy');authored();
+ check(JSON.stringify(containers.get(id).bounds)===JSON.stringify(lastPrepared.bounds),'new gesture determines new canvas bounds');
+ const expected=prepareBoardDrawing(second);check(JSON.stringify(lastPrepared.bounds)===JSON.stringify(expected.bounds),'previous canvas does not constrain new bounds');
+ check(JSON.stringify(drawingAuthoredBounds(controller.line(id).source.path,controller.data(id).contentSpace,containers.get(id).bounds))===JSON.stringify(drawingAuthoredBounds(expected.source.path,expected.contentSpace,expected.bounds)),'reanchor does not translate authored gesture');
+ const newHandle=handle.getBoundingClientRect(),newBounds=containers.get(id).bounds;check(Math.abs((newHandle.x-oldHandle.x)-(newBounds.x-emptySaved[0].bounds.x))<1,'handle reanchors with one container translation');
+ check(controller.panels(id).every(p=>getToyVolumeRaw(p.id)===.31&&isToyMuted(p.id)),'redraw applies retained volume/mute to new grids');
+ const authoredSaved=JSON.parse(JSON.stringify(containers.snapshot()));containers.restore(authoredSaved);authored();check(controller.line(id),'AUTHORED reload restores line');
+ // Exercise the same remove callback registered with the shared drag-to-trash flow.
+ let remove;window.ToySpawner={beginPanelDrag:o=>remove=o.remove,updatePanelDrag(){},endPanelDrag(){remove();}};
+ const trash=()=>{const header=card.querySelector('header');header.setPointerCapture=()=>{};for(const [type,x]of [['pointerdown',100],['pointermove',200],['pointerup',200]])header.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:101,button:0,clientX:x,clientY:100}));};
+ const owned=containers.get(id).internalObjectIds;trash();check(!containers.get(id)&&owned.every(x=>!model.getObject(x))&&toys.size===0,'shared trash removes authored toy and canonical grids');
+ // Empty deletion uses the same registered shared-trash callback.
+ const empty=controller.create({x:300,y:350}),emptyCard=document.getElementById(empty.id),header=emptyCard.querySelector('header');header.setPointerCapture=()=>{};
+ for(const [type,x]of [['pointerdown',100],['pointermove',200],['pointerup',200]])header.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:102,button:0,clientX:x,clientY:100}));
+ check(!containers.get(empty.id)&&toys.size===0,'shared trash removes empty toy without orphans');
+ creation.cancel();document.querySelector('#results').textContent=`PASS ${count} assertions — create, Clear, redraw elsewhere, audio, reload, shared trash`;
+}catch(e){document.querySelector('#results').textContent='FAIL '+e.stack;}
+</script>

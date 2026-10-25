@@ -5,15 +5,16 @@ import {getDisplayNameForId} from './instrument-catalog.js';
 import {RIPPLE_SIZE} from './simple-ripple.js';
 import {installVolumeUI,syncVolumeUI} from './baseToy/volume-ui.js';
 import {setToyVolume,setToyMuted} from './audio-core.js';
+import {createBoardInteractionHint} from './simple-interaction-hint.js';
 
 // Only input/presentation lives here. Wave animation never schedules a note.
-export function installSimpleRippleBoard({objects,controller,getWorld,getViewport,screenToWorld,now,unlock,canInteract=()=>true,onArm=()=>{},seedCubes=()=>{},onDirty=()=>{}}){
+export function installSimpleRippleBoard({objects,controller,getWorld,getViewport,screenToWorld,now,unlock,canInteract=()=>true,onArm=()=>{},seedCubes=()=>{},getCubes=()=>[],onDirty=()=>{}}){
  const world=getWorld(),root=document.createElement('div');root.className='simple-ripple-layer';world.append(root);
  const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.classList.add('simple-ripple-waves');root.append(svg);
- const cards=new Map(),rings=new Map();let armed=false,placement=null,frame;
- async function emit(id){await unlock();if(objects.get(id))controller.emit(id);}
- function cancel(){armed=false;placement=null;document.body.classList.remove('simple-ripple-armed');}
- function arm(){if(!canInteract())return false;onArm();armed=!armed;if(armed)seedCubes();document.body.classList.toggle('simple-ripple-armed',armed);return armed;}
+ const cards=new Map(),rings=new Map();let armed=false,placement=null,frame,teaching=null;
+ async function emit(id){await unlock();if(objects.get(id))await controller.emit(id);}
+ function cancel(){armed=false;placement=null;teaching?.dispose();teaching=null;document.body.classList.remove('simple-ripple-armed');}
+ function arm(){if(!canInteract())return false;onArm();armed=!armed;teaching?.dispose();teaching=null;if(armed){seedCubes();teaching=createBoardInteractionHint({getWorld,getViewport,screenToWorld,label:'TAP',demo:'tap',getCubes});}document.body.classList.toggle('simple-ripple-armed',armed);return armed;}
  function render(){
   const present=new Set();
   for(const o of objects.list()){
@@ -68,8 +69,9 @@ export function installSimpleRippleBoard({objects,controller,getWorld,getViewpor
  }
  const down=e=>{
   if(e.target.closest?.('.toy-spawner-art,.toy-spawner-logic,.toy-spawner-game,.palette-handle')){cancel();return;}
+  if(armed&&e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.container-toy,.heartbeat-toy,.simple-ripple-object')){teaching?.dispose();teaching=null;}
   if(!armed||!canInteract()||e.button>0||!getViewport().contains(e.target)||e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.container-toy,.heartbeat-toy,.simple-ripple-object'))return;
-  e.preventDefault();e.stopImmediatePropagation();placement={pointerId:e.pointerId,x:e.clientX,y:e.clientY};
+  teaching?.dispose();teaching=null;e.preventDefault();e.stopImmediatePropagation();placement={pointerId:e.pointerId,x:e.clientX,y:e.clientY};
  };
  const up=e=>{if(e.pointerId!==placement?.pointerId)return;const p=placement;placement=null;e.preventDefault();e.stopImmediatePropagation();if(Math.hypot(e.clientX-p.x,e.clientY-p.y)>6)return;const point=screenToWorld(e);const o=objects.create(point);cancel();void emit(o.id);};
  const escape=e=>{if(e.key==='Escape')cancel();};

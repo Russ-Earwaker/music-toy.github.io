@@ -2,17 +2,30 @@ import {lineDrawGridStates,drawGridLineSource} from './free-play-drawgrid.js';
 import {updateSilence} from './free-play-silence.js';
 import {getPlaybackInstance,getPlaybackLocalTick} from './playback-instances.js';
 import {clamp01} from './free-play-line.js';
+import {ensureTransportPlayingForSimpleAuthoring} from './simple-authoring-playback.js';
 
 // Each Container owns only drawing history. All playable notes/rests are read
 // and edited on the same ordinary DrawGrid instances used by the board.
-export function createSimpleDrawController({containers,model,getToy,createGrid,removeGrid,publish,cancelScheduled,getTransport,onChanged=()=>{},onPlay=()=>{}}){
+export function createSimpleDrawController({containers,model,getToy,createGrid,removeGrid,publish,cancelScheduled,getTransport,onChanged=()=>{},onPlay=()=>{},readAudioSettings=p=>({volume:Number(p.dataset.toyVolume??.65),muted:p.dataset.toyMuted==='1'}),applyAudioSettings=(p,s)=>Object.assign(p.dataset,{toyVolume:String(s.volume),toyMuted:s.muted?'1':'0'})}){
  const pending=new Map(),listeners=new Map();let serial=0;
  const empty=()=>({gesture:null,straightened:false,paint:[],surfacePaint:[],randomCutIds:[]});
  const panels=id=>(containers.get(id)?.internalToyIds||[]).map(getToy).filter(Boolean);
  const data=id=>containers.get(id)?.interactionData||empty();
  function setData(id,next){const c=containers.get(id);if(c)containers.setPresentation(id,{interactionData:{...data(id),...next}});}
- function clear(id){pending.delete(id);const result=containers.clear(id,{interactionData:empty()});onChanged();return result;}
- function create(options={}){const c=containers.create({...options,presentationType:'simple-draw',interactionData:empty(),width:options.width||1100,height:options.height||760});onChanged();return c;}
+ function clear(id){
+  pending.delete(id);const first=panels(id)[0];
+  if(first)containers.setPresentation(id,{state:{audioSettings:readAudioSettings(first)}});
+  const result=containers.clear(id,{interactionData:empty()});
+  if(result.ok){containers.resize(id,280,140);containers.setPresentation(id,{state:{open:false}});}
+  onChanged();return result;
+ }
+ async function drawPrepared(id,{source,bounds,contentSpace}){
+  const c=containers.get(id);if(!c)throw new Error('Simple Draw was deleted.');
+  if(pending.has(id)||c.internalObjectIds.length||data(id).gesture){const error=new Error('Clear this Simple Draw before drawing a new line.');error.code='DRAWING_EXISTS';throw error;}
+  containers.move(id,bounds.x,bounds.y);containers.resize(id,bounds.width,bounds.height);setData(id,{contentSpace});
+  return draw(id,source);
+ }
+ function create(options={}){const c=containers.create({...options,presentationType:'simple-draw',interactionData:empty(),width:options.width||280,height:options.height||140});onChanged();return c;}
  async function draw(id,source){
   const token={},c=containers.get(id);if(!c)throw new Error('Simple Draw was deleted.');
   // Only explicit Clear permits another stroke, including while grids initialize.
@@ -23,6 +36,7 @@ export function createSimpleDrawController({containers,model,getToy,createGrid,r
    for(let i=0;i<states.length;i++){
     const st=states[i];st.freePlay={strokeId,bar:i,startTick:st.freePlay.startTick,durationTicks:st.freePlay.durationTicks,phraseDurationTicks:source.durationTicks,containerManaged:true};
     const p=await createGrid(st,{x:c.bounds.x+i*900,y:c.bounds.y+220});created.push(p);
+    if(c.presentation.state.audioSettings)applyAudioSettings(p,c.presentation.state.audioSettings);
     if(pending.get(id)!==token||!containers.get(id)){const error=new Error('Drawing creation cancelled.');error.code='DRAWING_CANCELLED';throw error;}
    }
    const interactionData={...empty(),contentSpace:data(id).contentSpace,gesture:{path:structuredClone(source.path)},paint:initialPaint};
@@ -31,7 +45,7 @@ export function createSimpleDrawController({containers,model,getToy,createGrid,r
     const result=containers.attach(id,created.map(p=>p.id),{interactionData});if(!result.ok)throw new Error(result.reason);
    });
    pending.delete(id);created.forEach(p=>{p.classList?.remove('container-pending');publish(p,'simple-draw-created');});onChanged();
-   const transport=getTransport(id);if(transport){await transport.play();onPlay();}
+   const transport=getTransport(id);if(transport){await ensureTransportPlayingForSimpleAuthoring(transport);onPlay();}
    return {id};
   }catch(error){for(const p of created)if(!containers.owner(p.id))removeGrid(p);if(pending.get(id)===token)pending.delete(id);throw error;}
  }
@@ -65,7 +79,7 @@ export function createSimpleDrawController({containers,model,getToy,createGrid,r
    results.push(result);
   }return results;
  }
- return {create,draw,clear,line,panels,setSilence,setData,data,onNote,notify,migrateLegacy,
+ return {create,draw,drawPrepared,clear,line,panels,setSilence,setData,data,onNote,notify,migrateLegacy,isPending:id=>pending.has(id),
   setStraightened:(id,value)=>setData(id,{straightened:!!value}),
   paintStore:id=>({get:()=>data(id).surfacePaint||[],set:value=>setData(id,{surfacePaint:structuredClone(value)})}),
   dispose:id=>{pending.delete(id);listeners.delete(id);},

@@ -1,0 +1,74 @@
+<!doctype html><meta charset="utf-8"><title>Contextual Simple authoring</title>
+<link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../free-play.css"><link rel="stylesheet" href="../simple-ripple.css"><link rel="stylesheet" href="../simple-bouncer.css"><link rel="stylesheet" href="../simple-drum.css">
+<style>body{margin:0;background:#10232d;color:white}#viewport{position:relative;width:1400px;height:900px;overflow:hidden}#world{position:absolute;inset:0}#results{white-space:pre-wrap}</style>
+<pre id="results">Running</pre><div id="viewport"><div id="world"></div></div>
+<script type="module">
+import {installBoardBouncer} from '../src/board-bouncer.js';
+import {createBoardPhysicalObjects} from '../src/board-physical-objects.js';
+import {createSimpleBouncerController} from '../src/simple-bouncer.js';
+import {createRippleObjects} from '../src/simple-ripple.js';
+import {createLoopingRippleController} from '../src/simple-ripple-loop.js';
+import {installSimpleRippleBoard} from '../src/simple-ripple-board.js';
+import {createDrumObjects} from '../src/simple-drum.js';
+import {createDrumLoopController} from '../src/simple-drum-loop.js';
+import {installSimpleDrumBoard} from '../src/simple-drum-board.js';
+import {createSimpleDrawController} from '../src/simple-draw.js';
+import {installSimpleDrawCreation} from '../src/simple-draw-creation.js';
+import {createTickTransport} from '../src/tick-transport.js';
+import {createConnectionModel,HEARTBEAT_PORTS} from '../src/connections.js';
+import {createContainerToyModel} from '../src/container-toys.js';
+import {normalizeAuthoredState,restoreAuthoredNotes,drawgridPatternFromState} from '../src/drawgrid/dg-authored-notes.js';
+import {applyFreePlayDrawGrid} from '../src/free-play-drawgrid.js';
+import {seedTriggerCubes,triggerCreationPoint} from '../src/trigger-starter-cubes.js';
+import {SIMPLE_PLACE_HINT_DELAY} from '../src/simple-interaction-hint.js';
+let count=0;const check=(v,m)=>{if(!v)throw Error(m);count++;};const wait=ms=>new Promise(r=>setTimeout(r,ms)),settle=()=>wait(100);
+try{
+ const viewport=document.querySelector('#viewport'),world=document.querySelector('#world'),physical=createBoardPhysicalObjects(),drums=createDrumObjects(),ripples=createRippleObjects(),model=createConnectionModel(),toys=new Map(),positions=new Map(),context={currentTime:0,state:'running'},plays=[],sounds=[],captures=[];let serial=0,ballBoard,rippleBoard,drumBoard,paintBoard,drumLoop,rippleLoop;
+ const transport=createTickTransport({id:'test',getContext:()=>context,emit:e=>{if(e.type==='play')plays.push({tick:e.positionTick,notes:drums.list().reduce((s,d)=>s+d.authoredState.pattern.authoredNotes.length,0)});drumLoop?.transportChanged('test',e.type,e.fromState);rippleLoop?.transportChanged('test',e.type);}});
+ model.registerObject('heartbeat',{ports:HEARTBEAT_PORTS,transportId:'test'});
+ const containers=createContainerToyModel(model,{getRect:id=>positions.get(id),setPosition:(id,x,y)=>Object.assign(positions.get(id),{x,y}),removeInternal:id=>{model.removeObject(id);toys.delete(id);positions.delete(id);}});
+ const applyGrid=async(p,state)=>{p.state=normalizeAuthoredState(state);p.dataset.steps=String(state.steps);p.dataset.instrument=state.instrument;restoreAuthoredNotes(p,p.state);p.__seqPattern=drawgridPatternFromState(p.state);if(state.freePlay)applyFreePlayDrawGrid(p,state.freePlay);};
+ const music={containers,model,getToy:id=>toys.get(id),getTransport:()=>transport,publish(p){p.__seqPattern=drawgridPatternFromState({...p.state,authoredNotes:p.__dgAuthoredNotes});},cancelScheduled(){},removeGrid:p=>{model.removeObject(p.id);toys.delete(p.id);},createGrid:async(state,position)=>{const p={id:'grid-'+ ++serial,dataset:{toy:'drawgrid'},classList:{remove(){}}};await applyGrid(p,state);model.registerObject(p.id);toys.set(p.id,p);positions.set(p.id,{...position,width:800,height:760});return p;}};
+ const paint=createSimpleDrawController(music),bouncer=createSimpleBouncerController({...music,objects:physical,applyGrid});
+ drumLoop=createDrumLoopController({objects:drums,getTransport:()=>transport,schedule:e=>sounds.push(e)});
+ rippleLoop=createLoopingRippleController({objects:ripples,getReceivers:()=>physical.list('cube').map(c=>c.boardObject),getTransport:()=>transport,schedule:e=>sounds.push(e)});
+ const connect=id=>{const r=model.connect('transport',{objectId:'heartbeat',portId:'output'},{objectId:id,portId:'input'});check(r.ok,'ordinary transport wiring');};
+ const common={getWorld:()=>world,getViewport:()=>viewport,screenToWorld:e=>{const r=viewport.getBoundingClientRect();return {x:(e.x??e.clientX)-r.left,y:(e.y??e.clientY)-r.top};},unlock:async()=>{}};
+ const cancelOthers=keep=>{for(const board of [ballBoard,rippleBoard,drumBoard,paintBoard])if(board&&board!==keep)board.cancel();};
+ ballBoard=installBoardBouncer({...common,objects:physical,controller:bouncer,onArm:()=>cancelOthers(ballBoard),createCapture:async request=>{const c=bouncer.create({x:request.launch.x,y:request.launch.y});connect(c.id);await bouncer.throwBall(c.id,{ballId:request.ballId,launch:request.launch,targetPosition:request.release});captures.push(c.id);}});
+ rippleBoard=installSimpleRippleBoard({...common,objects:ripples,controller:rippleLoop,now:()=>0,getCubes:()=>physical.list('cube'),onArm:()=>cancelOthers(rippleBoard),seedCubes:()=>seedTriggerCubes({objects:physical,center:triggerCreationPoint({viewport,screenToWorld:common.screenToWorld})})});
+ drumBoard=installSimpleDrumBoard({...common,objects:drums,controller:drumLoop,onArm:()=>cancelOthers(drumBoard)});
+ paintBoard=installSimpleDrawCreation({...common,onArm:()=>cancelOthers(paintBoard),commit:async prepared=>{const c=paint.create(prepared.bounds);connect(c.id);await paint.drawPrepared(c.id,prepared);}});
+ viewport.setPointerCapture=()=>{};viewport.hasPointerCapture=()=>false;
+ const hint=()=>world.querySelector('.simple-interaction-hint'),expectPlace=()=>check(hint()?.querySelector('span').textContent==='PLACE'&&!hint().hidden,'PLACE visible');
+ const send=(type,x,y,target=viewport)=>{const r=viewport.getBoundingClientRect();target.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:30,button:0,buttons:type==='pointerup'?0:1,clientX:r.left+x,clientY:r.top+y}));};
+ const tap=async(x,y,target=viewport)=>{send('pointerdown',x,y,target);send('pointerup',x,y,target);await settle();};
+ ballBoard.arm({mode:'cube'});expectPlace();check(physical.list().length===0,'PLACE never creates example Cubes');await tap(240,350);check(physical.list('cube').length===1&&!hint(),'Cube placement removes hint');check(transport.state==='stopped'&&plays.length===0,'passive Cube does not autoplay');
+ ballBoard.cancel();ballBoard.arm({mode:'cube'});check(hint().hidden,'repeat Cube hint delayed');await wait(SIMPLE_PLACE_HINT_DELAY+60);expectPlace();ballBoard.cancel();
+ ballBoard.arm({mode:'cube'});check(hint().hidden,'repeat Cube delay starts anew');await tap(370,440);await wait(SIMPLE_PLACE_HINT_DELAY+40);check(!hint(),'early Cube placement cancels delayed hint completely');
+ drumBoard.arm();expectPlace();check(drums.list().length===0,'PLACE never creates example Drums');await tap(1080,500);check(drums.list().length===1&&!hint(),'real placement creates Drum and dismisses hint');check(transport.state==='stopped'&&plays.length===0,'empty Drum placement leaves stopped');
+ drumBoard.cancel();drumBoard.arm();check(hint().hidden,'repeat Drum hint delayed');await wait(SIMPLE_PLACE_HINT_DELAY+60);expectPlace();drumBoard.cancel();
+ drumBoard.arm();await tap(1050,650);await wait(SIMPLE_PLACE_HINT_DELAY+40);check(!hint(),'early Drum placement cancels delayed hint');
+ drumBoard.cancel();drumBoard.arm();check(hint().hidden,'pending PLACE before tool switch');paintBoard.arm();await wait(SIMPLE_PLACE_HINT_DELAY+40);check(hint()?.querySelector('span').textContent==='DRAW'&&world.querySelectorAll('.simple-interaction-hint').length===1,'tool switch cancels pending PLACE');paintBoard.cancel();
+ drumBoard.arm();drumBoard.cancel();await wait(SIMPLE_PLACE_HINT_DELAY+40);check(!hint(),'ending creation mode cancels pending PLACE');
+ const contextual=label=>{check(hint()?.querySelector('span').textContent===label,'contextual '+label);const id=hint().dataset.targetCubeId,cube=physical.get(id);check(!!cube,'hint selects committed visible Cube');const ox=Number(hint().dataset.originX),oy=Number(hint().dataset.originY),ex=Number(hint().dataset.endX),ey=Number(hint().dataset.endY);check(Math.hypot(ox-cube.x,oy-cube.y)<600,'hint origin near Cube cluster');check(Math.abs((cube.x-ox)*(ey-oy)-(cube.y-oy)*(ex-ox))<1e-5,'demo aims toward target Cube');return cube;};
+ rippleBoard.arm();contextual('TAP');check(transport.state==='stopped','Ripple teaching does not autoplay');send('pointerdown',100,400);check(!hint(),'Ripple hint removed before commit');send('pointerup',100,400);await settle();check(ripples.list().length===1&&transport.state==='playing'&&plays.length===1,'Ripple placement autoplays');
+ transport.seekTick(173);transport.setBpm(137);const runningTick=transport.currentTick,wires=JSON.stringify(model.snapshot().connections),before=plays.length;
+ ballBoard.arm({mode:'ball',seed:false});contextual('SWIPE');check(hint().querySelector('.interaction-hint-trajectory').getAttribute('points').split(' ').length===2,'Ball demo is one straight swipe');send('pointerdown',500,650);check(!hint(),'Ball hint removed before real drag');send('pointermove',650,500);check(!!world.querySelector('.physical-creation-prediction').getAttribute('points'),'normal real trajectory replaces teaching');send('pointerup',650,500);await settle();check(captures.length===1&&plays.length===before,'running Cannon commit never restarts playback');check(transport.currentTick===runningTick&&transport.bpm===137,'Cannon commit preserves phase and BPM');check(JSON.parse(wires).every(e=>model.snapshot().connections.some(n=>n.id===e.id)),'existing graph preserved');
+ transport.hardStop();ballBoard.cancel();ballBoard.arm({mode:'ball',seed:false});send('pointerdown',600,650);send('pointermove',700,500);send('pointerup',700,500);await settle();check(captures.length===2&&transport.state==='playing'&&plays.length===before+1,'stopped Cannon commit autoplays once');
+ transport.hardStop();paintBoard.arm();send('pointerdown',700,230);check(!hint()||hint().hidden,'DRAW dismissed before authoring');send('pointermove',900,330);send('pointerup',1100,200);await settle();check(transport.state==='playing'&&plays.length===before+2,'Paint completion retains autoplay');
+ transport.hardStop();const drum=drums.list()[0],pad=document.getElementById(drum.id).querySelector('.simple-drum-pad');pad.setPointerCapture=()=>{};await tap(drum.transform.x,drum.transform.y,pad);check(transport.state==='playing'&&plays.length===before+3,'first manual Drum hit autoplays');check(drums.get(drum.id).authoredState.pattern.authoredNotes.length===1&&plays.at(-1).notes>=1,'manual pattern recorded before Play');
+ const playCount=plays.length,phase=transport.currentTick;await tap(drum.transform.x,drum.transform.y,pad);check(plays.length===playCount&&transport.currentTick===phase,'repeated manual Drum hit does not restart or reset');const sameSlot=sounds.filter(e=>e.sourceId===drum.id&&e.activationSource==='manual');check(sameSlot.length===1,'manual same-slot admission has no duplicate burst');
+ transport.hardStop();await drumLoop.trigger({receiverId:drum.id,when:transport.tickToAudioTime(240)});check(transport.state==='stopped'&&plays.length===playCount,'triggered Drum hit cannot restart transport');
+ const kit=drumBoard.createSet();check(kit.length===6&&kit.every(o=>!o.authoredState.pattern.authoredNotes.length)&&transport.state==='stopped','empty Drum Set does not autoplay');
+ const kitPad=document.getElementById(kit[0].id).querySelector('.simple-drum-pad');kitPad.setPointerCapture=()=>{};await tap(kit[0].transform.x,kit[0].transform.y,kitPad);check(transport.state==='playing'&&plays.length===playCount+1,'first performed Drum Set hit autoplays');
+ // Seeded target selection observes committed coordinates, not scatter animation rects.
+ ballBoard.cancel();for(const c of physical.list('cube'))physical.remove(c.id);ballBoard.arm({mode:'ball'});check(physical.list('cube').length===3,'starters committed before contextual hint');contextual('SWIPE');ballBoard.cancel();
+ for(const c of physical.list('cube'))physical.remove(c.id);rippleBoard.arm();check(physical.list('cube').length===3,'Ripple starters committed before contextual placement');contextual('TAP');rippleBoard.cancel();
+ ballBoard.arm({mode:'ball',seed:false});const labelRange=document.createRange();labelRange.selectNodeContents(hint().querySelector('span'));const labelRect=labelRange.getBoundingClientRect();
+ const major=[...world.querySelectorAll('.simple-drum-object,.simple-ripple-object,.physical-cube')].map(n=>n.getBoundingClientRect());
+ check(!major.some(r=>Math.min(r.right,labelRect.right)>Math.max(r.left,labelRect.left)&&Math.min(r.bottom,labelRect.bottom)>Math.max(r.top,labelRect.top)),'SWIPE caption avoids major toys on crowded board');
+ for(const [label,preview]of [['TAP',()=>{rippleBoard.cancel();rippleBoard.arm();}],['SWIPE',()=>{ballBoard.cancel();ballBoard.arm({mode:'ball',seed:false});}]]){const b=document.createElement('button');b.textContent='Preview contextual '+label;b.onclick=preview;document.body.append(b);}
+ document.querySelector('#results').textContent=`PASS ${count} assertions — contextual targets, single swipe, PLACE delays/cancellation, real authoring autoplay and transport phase`;
+}catch(e){document.querySelector('#results').textContent='FAIL '+e.stack;}
+</script>

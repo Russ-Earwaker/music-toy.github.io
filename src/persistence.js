@@ -15,6 +15,7 @@ import { containerToyModel } from './container-toys.js';
 import {boardPhysicalObjects} from './board-physical-objects.js';
 import {rippleObjects} from './simple-ripple.js';
 import {drumObjects} from './simple-drum.js';
+import {stringSurfaces} from './string-surface.js';
 import { heartbeatModel } from './heartbeats.js';
 import { applyToyInstrument } from './instrument-state.js';
 import { normalizeMusicalRole, restoreToyMusicalRole } from './musical-role.js';
@@ -948,6 +949,7 @@ export function getSnapshot(){
     physicalObjects: boardPhysicalObjects.authoredSnapshot(),
     rippleObjects: rippleObjects.snapshot(),
     drumObjects: drumObjects.snapshot(),
+    stringSurfaces: stringSurfaces.snapshot(),
     ...(surfacePaint().length?{freePlaySurfacePaint:structuredClone(surfacePaint())}:{}),
     camera,
   },panels.map(p=>p.__sharedToyDefinition).filter(Boolean));
@@ -963,6 +965,7 @@ export function applySceneSnapshot(snap){
   try{snap=validateStructureInstanceLinks(validateInstanceLinks(migrateSourceUses(projectLinkedDefinitions(snap))));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
   if (!snap || typeof snap !== 'object') return false;
   restoreSurfacePaint(snap.freePlaySurfacePaint);
+  try { stringSurfaces.restore(snap.stringSurfaces || []); } catch(error) { console.warn('[persistence] invalid String surfaces',error);return false; }
   try { drumObjects.restore(snap.drumObjects || []); } catch(error) { console.warn('[persistence] invalid Drum objects',error);return false; }
   try { rippleObjects.restore(snap.rippleObjects || []); } catch(error) { console.warn('[persistence] invalid Ripple objects',error);return false; }
   try { boardPhysicalObjects.restore(snap.physicalObjects || []); } catch(error) { console.warn('[persistence] invalid physical objects',error);return false; }

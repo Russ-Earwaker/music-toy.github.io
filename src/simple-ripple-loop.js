@@ -1,8 +1,10 @@
+import {surfaceAnchor,surfaceOffset} from './surface-timing.js';
 import {RIPPLER_LOOP_TICKS,ripplerCycleAtTick} from './ripplesynth-transport.js';
 import {quantizeBouncerOffsetTick} from './bouncer-transport.js';
-import {waveReceiverDistance} from './board-wave.js';
+import {waveReceiverDistance,waveReceiverContacts} from './board-wave.js';
 import {resolveBoardInteraction} from './board-object.js';
 import {RIPPLE_RANGE} from './simple-ripple.js';
+import {ensureTransportPlayingForSimpleAuthoring} from './simple-authoring-playback.js';
 
 // Called by the shared audio scheduler. RAF only reads the current cycle.
 export function createLoopingRippleController({objects,getReceivers,getTransport,isReceiverDragging=()=>false,schedule,cancel=()=>{},respond=()=>{}}){
@@ -22,23 +24,27 @@ export function createLoopingRippleController({objects,getReceivers,getTransport
    }
   }
  }
- function receiverEvent(c,o,r,intendedTick){
-  const event=resolveBoardInteraction(o,r,0);if(!event)return null;
+ function receiverEvent(c,o,r,intendedTick,contact={}){
+  if(r.capabilities?.playable?.surface&&!Object.keys(contact).length)contact=waveReceiverContacts(c.origin,r).sort((a,b)=>a.distance-b.distance)[0]?.contact||{};
+  const event=resolveBoardInteraction(o,r,0,contact);if(!event)return null;
   const eventTick=c.start+quantizeBouncerOffsetTick(intendedTick,c.start,2,{loopLengthTicks:c.duration});
   return {...event,intendedTick,eventTick};
  }
  function discoverReceivers(c,o,fromTick){
   const {origin,start,duration,events,seen}=c;
   for(const r of getReceivers()){
-   if(!r.capabilities?.triggerReceiver||seen.has(r.id))continue;
+   if(!r.capabilities?.triggerReceiver)continue;
+   const contacts=waveReceiverContacts(origin,r).sort((a,b)=>a.distance-b.distance),firstTick=start+(contacts[0]?.distance||0)/RIPPLE_RANGE*duration;
+   for(const {distance,contact}of contacts){
+   const key=contact.lane==null?r.id:r.id+':'+contact.lane;if(seen.has(key))continue;
    // Observe each identity once, including receivers already behind the wave.
    // Moving an existing receiver must not rewrite this cycle's geometry.
-   seen.add(r.id);
-   const distance=waveReceiverDistance(origin,r);
+   seen.add(key);
    if(distance>RIPPLE_RANGE)continue;
    const intendedTick=start+distance/RIPPLE_RANGE*duration;
    if(intendedTick<fromTick)continue;
-   const event=receiverEvent(c,o,r,intendedTick);if(event)events.push(event);
+   const event=receiverEvent(c,o,r,intendedTick,contact);if(event){if(r.capabilities.playable?.surface?.timing)Object.assign(event,{eventTick:surfaceAnchor(firstTick)+surfaceOffset(intendedTick-firstTick),surfaceTiming:true});events.push(event);}
+   }
   }
  }
  function snapshot(o,start,duration,t){
@@ -61,7 +67,8 @@ export function createLoopingRippleController({objects,getReceivers,getTransport
    let start=s.cycle.start+s.cycle.duration;
    const duration=o.authoredState.periodLoops*RIPPLER_LOOP_TICKS;
    start+=Math.floor((tick-start)/duration)*duration;
-   s.cycle=snapshot(o,start,duration,t);s.floor=start;
+   const tails=s.cycle.events.filter((e,i)=>e.surfaceTiming&&!e.disabled&&!s.cycle.scheduled.has(i)&&e.eventTick>=start&&e.eventTick<start+duration);
+   s.cycle=snapshot(o,start,duration,t);s.cycle.events.push(...tails);s.cycle.events.sort((a,b)=>a.eventTick-b.eventTick);s.floor=start;
   }
   s.lastTick=tick;return s;
  }
@@ -105,9 +112,11 @@ export function createLoopingRippleController({objects,getReceivers,getTransport
     const e=c.events[i];if(e.disabled||c.scheduled.has(i)||e.eventTick<s.floor||e.eventTick>=end)continue;
     c.scheduled.add(i);
     // Timbre/volume remain live until this short lookahead commits the event.
-    const event={...e,instrument:o.capabilities.instrumentSource.instrumentId,volume:o.authoredState.volume,muted:o.authoredState.muted,
+    const direct=e.soundSource==='receiver'?resolveBoardInteraction(o,getReceivers().find(r=>r.id===e.receiverId),0,e.contact||e):null;
+    if(e.soundSource==='receiver'&&!direct)continue;
+    const event={...e,...direct,instrument:o.capabilities.instrumentSource.instrumentId,volume:o.authoredState.volume,muted:o.authoredState.muted,
      emitterId:o.id,cycleStart:c.start,transportId:t.id,when:t.tickToAudioTime(e.eventTick)};
-    if(e.soundSource==='receiver')Object.assign(event,{instrument:e.instrument,volume:e.volume,muted:e.muted});
+    if(direct)Object.assign(event,{instrument:direct.instrument,volume:direct.volume,muted:direct.muted});
     if(e.eventTick<now-12)continue;
     const key=soundKey(event);
     if(event.soundSource==='receiver')schedule(event);
@@ -134,5 +143,5 @@ export function createLoopingRippleController({objects,getReceivers,getTransport
  }
  function reset(){for(const id of states.keys())cancel(id);states.clear();sounds.clear();}
  const off=objects.subscribe(e=>{if(e.type==='remove')clear(e.object.id);if(e.type==='restore')reset();});
- return {tick,visibleWaves,transportChanged,reset,emit(){tick();return null;},destroy(){reset();off();}};
+ return {tick,visibleWaves,transportChanged,reset,async emit(id){if(!objects.get(id))return null;await ensureTransportPlayingForSimpleAuthoring(getTransport(id));tick();return null;},destroy(){reset();off();}};
 }

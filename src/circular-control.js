@@ -13,7 +13,7 @@ const drawings={
 };
 export function decorateCircularControl(button,{label,asset,icon,size=48}={}){
  button.type='button';button.classList.add('c-btn');button.setAttribute('aria-label',label);button.title=label;button.innerHTML=CIRCULAR_BUTTON_HTML;button.style.setProperty('--c-btn-size',size+'px');
- const svg=drawings[icon],url=asset?`./assets/UI/${asset}.png`:'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svg||drawings.draw}</svg>`);
+ const svg=drawings[icon],url=asset?new URL(`../assets/UI/${asset}.png`,import.meta.url).href:'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svg||drawings.draw}</svg>`);
  button.querySelector('.c-btn-core').style.setProperty('--c-btn-icon-url',`url("${url}")`);return button;
 }
 

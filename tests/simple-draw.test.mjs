@@ -16,9 +16,16 @@ import {MAIN_TRANSPORT_ID} from '../src/transport-registry.js';
 import {resolveMusicalPitch} from '../src/harmonic-adaptation.js';
 import {midiToName} from '../src/note-helpers.js';
 import {uiMode} from '../src/ui-mode.js';
+import {prepareBoardDrawing,drawingAuthoredBounds} from '../src/simple-draw-placement.js';
+import {simplePaintState} from '../src/simple-paint-state.js';
 
 const short=()=>createLineSource([{x:.1,y:.8},{x:.6,y:.2}]);
 const maximum=()=>createLineSource([{x:0,y:.9},{x:1,y:.1},{x:0,y:.9},{x:1,y:.1},{x:0,y:.9}]);
+test('Paint actions derive from content and transient drawing state',()=>{
+ assert.deepEqual(simplePaintState(false),{state:'EMPTY_IDLE',canvas:false,draw:true,drawSelected:false,scissors:false,scissorsSelected:false,coil:false,clear:false});
+ assert.equal(simplePaintState(false,true).state,'DRAW_ACTIVE');assert.equal(simplePaintState(false,true).draw,true);assert.equal(simplePaintState(false,true).drawSelected,true);
+ assert.deepEqual(simplePaintState(true),{state:'AUTHORED_SCISSORS',canvas:true,draw:false,drawSelected:false,scissors:true,scissorsSelected:true,coil:true,clear:true});
+});
 function fixture({afterCreate=async()=>{}}={}){
  clearPlaybackInstancesForTests();const model=createConnectionModel(),toys=new Map(),positions=new Map(),calls=[],slots=[],cancelled=[];let serial=0,sync=()=>{};
  model.registerObject(MAIN_TRANSPORT_ID,{ports:HEARTBEAT_PORTS,transportId:MAIN_TRANSPORT_ID});
@@ -128,10 +135,12 @@ for(const action of ['clear','delete'])test(`pending drawing ${action} removes d
  let release;const gate=new Promise(resolve=>release=resolve);let count=0;
  const f=fixture({afterCreate:()=>++count===1?gate:Promise.resolve()});try{
   const c=f.create(),first=f.service.draw(c.id,maximum());
+  assert.equal(f.service.isPending(c.id),true);
   const rejected=assert.rejects(first,/cancelled/);
   if(action==='clear')f.service.clear(c.id);
   if(action==='delete')f.containers.remove(c.id);
   release();await rejected;
+  assert.equal(f.service.isPending(c.id),false);
   assert.equal(f.toys.size,0);
   assert.equal(f.model.getObjectIds().filter(id=>id.startsWith('grid')).length,f.toys.size);
   assert.equal(f.containers.list().length,action==='clear'?1:0);
@@ -158,5 +167,39 @@ test('legacy group already collapsed by the foundation upgrades in place',async(
   const old=f.containers.collapse([p.id]).container;
   assert.ok(f.service.migrateLegacy()[0].ok);assert.equal(f.containers.list().length,1);
   const c=f.containers.get(old.id);assert.equal(c.presentation.type,'simple-draw');assert.equal(c.bounds.width,1100);assert.deepEqual(c.interactionData.gesture.path,source.path);
+ }finally{f.dispose();}
+});
+
+test('Clear and free-board redraw retain identity, routing and audio but replace geometry and owned notes',async()=>{
+ const f=fixture();try{
+  const c=f.create(),first=prepareBoardDrawing([{x:100,y:200},{x:450,y:350},{x:650,y:150}]);
+  await f.service.drawPrepared(c.id,first);
+  f.service.panels(c.id).forEach(p=>Object.assign(p.dataset,{toyVolume:'0.27',toyMuted:'1'}));
+  f.containers.setPresentation(c.id,{state:{customSetting:'retained'}});f.service.setStraightened(c.id,true);
+  const oldIds=f.containers.get(c.id).internalObjectIds,wire=f.model.getParent(c.id),identity=f.containers.get(c.id).boardObject.id;
+  assert.ok(f.service.clear(c.id).ok);
+  const empty=f.containers.get(c.id);assert.equal(empty.id,c.id);assert.equal(empty.boardObject.id,identity);
+  assert.deepEqual(empty.bounds,{x:first.bounds.x,y:first.bounds.y,width:280,height:140});
+  assert.deepEqual(empty.internalObjectIds,[]);assert.equal(f.service.line(c.id),null);
+  assert.deepEqual(empty.presentation.state.audioSettings,{volume:.27,muted:true});assert.equal(empty.presentation.state.customSetting,'retained');
+  assert.equal(empty.interactionData.gesture,null);assert.equal(empty.interactionData.contentSpace,undefined);assert.equal(empty.interactionData.straightened,false);
+  assert.ok(oldIds.every(id=>!f.model.getObject(id)&&!f.toys.has(id)));assert.equal(f.model.getParent(c.id).id,wire.id);
+  const saved=JSON.parse(JSON.stringify(f.containers.snapshot()));f.containers.restore(saved);
+  assert.deepEqual(f.containers.get(c.id).presentation.state.audioSettings,{volume:.27,muted:true});assert.equal(f.service.line(c.id),null);
+  const second=prepareBoardDrawing([{x:2200,y:1300},{x:2550,y:1100},{x:2500,y:1500},{x:2900,y:1380}]);
+  await f.service.drawPrepared(c.id,second);
+  const next=f.containers.get(c.id);assert.equal(next.id,c.id);assert.deepEqual(next.bounds,second.bounds);assert.deepEqual(f.service.data(c.id).contentSpace,second.contentSpace);
+  assert.deepEqual(drawingAuthoredBounds(f.service.line(c.id).source.path,second.contentSpace,next.bounds),drawingAuthoredBounds(second.source.path,second.contentSpace,second.bounds));
+  assert.ok(f.service.panels(c.id).every(p=>p.dataset.toyVolume==='0.27'&&p.dataset.toyMuted==='1'));
+  assert.ok(next.internalObjectIds.every(id=>!oldIds.includes(id)));assert.equal(f.model.getParent(c.id).id,wire.id);
+  const authored=JSON.parse(JSON.stringify(f.containers.snapshot()));f.containers.restore(authored);assert.ok(f.service.line(c.id));assert.deepEqual(f.containers.get(c.id).bounds,second.bounds);
+  const owned=next.internalObjectIds;assert.ok(f.containers.remove(c.id).ok);assert.ok(owned.every(id=>!f.toys.has(id)&&!f.model.getObject(id)));
+  const other=f.create();await f.service.drawPrepared(other.id,first);f.service.clear(other.id);assert.ok(f.containers.remove(other.id).ok);assert.equal(f.toys.size,0);
+ }finally{f.dispose();}
+});
+
+test('Paint completion starts stopped transport and never calls Play again on a running clock',async()=>{
+ const f=fixture();try{let plays=0;f.transport.play=async()=>{plays++;f.transport.state='playing';};const a=f.create();await f.service.draw(a.id,short());assert.equal(f.transport.state,'playing');assert.equal(plays,1);
+ f.transport.currentTick=217;const graph=f.model.snapshot().connections,b=f.create();await f.service.draw(b.id,short());assert.equal(plays,1);assert.equal(f.transport.currentTick,217);assert.ok(graph.every(e=>f.model.snapshot().connections.some(n=>n.id===e.id)));
  }finally{f.dispose();}
 });

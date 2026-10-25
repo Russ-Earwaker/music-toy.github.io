@@ -1,3 +1,4 @@
+import {createStringSurfaces} from '../src/string-surface.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createConnectionModel,HEARTBEAT_PORTS} from '../src/connections.js';
@@ -26,7 +27,7 @@ function fixture({afterCreate=async()=>{},extraReceivers=()=>[],onReceiverTrigge
  const structures=createStructureToyModel(model,{getDuration:id=>toyLoopLengthTicks(toys.get(id))}),adapter=createChainSequenceAdapter({getToy:id=>toys.get(id),chainState:new Map(),connectionModel:model}),scheduler=createSequencerScheduler();
  sync=()=>adapter.sync([...toys.values()],{currentTick:transport.currentTick,state:'stopped'},{connections:model.list('sequence'),structures:structures.list()});
  const wire=(from,to,port='output',kind='sequence')=>{const r=model.connect(kind,{objectId:from,portId:port},{objectId:to,portId:'input'});assert.ok(r.ok,r.reason);return r.connection;};
- const create=(types=[])=>{const c=service.create({x:0,y:0});let parent=MAIN_TRANSPORT_ID,port='output',kind='transport';for(const type of types){const s=structures.createStandalone(type);if(type==='transpose')structures.setSemitones(s.id,7);if(type==='repeat')structures.setCount(s.id,2);wire(parent,s.id,port,kind);parent=s.id;port='child:0';kind='sequence';}wire(parent,c.id,port,kind);sync();return c;};
+ const create=(types=[],options={})=>{const c=service.create({x:0,y:0,...options});let parent=MAIN_TRANSPORT_ID,port='output',kind='transport';for(const type of types){const s=structures.createStandalone(type);if(type==='transpose')structures.setSemitones(s.id,7);if(type==='repeat')structures.setCount(s.id,2);wire(parent,s.id,port,kind);parent=s.id;port='child:0';kind='sequence';}wire(parent,c.id,port,kind);sync();return c;};
  const poll=(from,to)=>{transport.currentTick=from;scheduler.tick({transportId:MAIN_TRANSPORT_ID,playbackTurns:adapter.turnsForLookahead(from,to),getToy:id=>toys.get(id),currentTick:from,lookaheadEndTick:to,tickToAudioTime:t=>t});};
  const capture=async(id,launch={x:0,y:0,vx:420,vy:0})=>{if(!objects.list("cube").length)objects.addCube(300,0);const ball=objects.addBall(launch.x,launch.y);await service.throwBall(id,{ballId:ball.id,launch});return ball;};
  return {objects,capture,model,toys,containers,service,transport,positions,calls,commits,create,wire,poll,sync,structures,createGrid,scheduler,dispose(){service.destroy();scheduler.dispose();adapter.reset();structures.dispose();containers.dispose();clearPlaybackInstancesForTests();}};
@@ -334,4 +335,72 @@ test('normal Cannon capture bounces from Drum and routes a transient receiver-ow
   assert.equal(f.service.panels(c.id)[0].__dgAuthoredNotes.length,0);
   f.transport.currentTick=24;f.service.scheduleReceiverHits();assert.equal(events.length,0,'Do not sound a predicted collision before physical contact');f.transport.currentTick=36;f.service.scheduleReceiverHits();f.service.scheduleReceiverHits();assert.equal(events.length,1);assert.equal(events[0].instrument,'DRUM SNARE 1');assert.equal(events[0].sourceId,drum.id);assert.equal(drums.get(drum.id).authoredState.pattern.authoredNotes.length,0);
  }finally{loop.destroy();f.dispose();}
+});
+
+test('Cannon commit starts stopped transport once while passive Cube placement leaves it stopped',async()=>{
+ const f=fixture();try{let plays=0;f.transport.play=async()=>{plays++;f.transport.state='playing';};f.objects.addCube(300,0);assert.equal(plays,0);assert.equal(f.transport.state,'stopped');
+ const c=f.create();await f.capture(c.id);assert.equal(f.transport.state,'playing');assert.equal(plays,1);f.transport.currentTick=217;await f.capture(c.id);assert.equal(plays,1);assert.equal(f.transport.currentTick,217);
+ }finally{f.dispose();}
+});
+
+test('Cannon receiver admission plays a String contact once without capturing receiver-owned music into the Cannon grid',async()=>{
+ const surfaces=createStringSurfaces(),surface=surfaces.create({start:{x:180,y:-150},end:{x:180,y:150},instrument:'PIANO'}),received=[];
+ const f=fixture({extraReceivers:()=>surfaces.list().map(boardCollisionBody),onReceiverTrigger:e=>received.push(e)});try{
+  f.transport.tickToAudioTime=t=>t/192;f.transport.audioTimeToTick=t=>t*192;
+  const c=f.create();await f.capture(c.id);const capture=f.service.data(c.id).capture;
+  assert.equal(capture.collisions[0].cubeId,surface.id);assert.equal(f.service.panels(c.id)[0].__dgAuthoredNotes.length,0);
+  f.transport.currentTick=90;f.service.scheduleReceiverHits();f.service.scheduleReceiverHits();assert.equal(received.length,1);assert.equal(received[0].instrument,'PIANO');assert.ok(Number.isFinite(received[0].progress));assert.equal(surfaces.get(surface.id).authoredState.recordedEvents.length,0);
+ }finally{f.dispose();}
+});
+
+test('Gravity Cannon reuses stopped/running commit, pause/reset and next-flight aim semantics',async()=>{
+ const f=fixture();try{let starts=0;f.transport.play=async()=>{starts++;f.transport.state='playing';};
+  const c=f.create([],{ballMode:'gravity'}),launch=boardLaunch({x:0,y:0},{x:100,y:0});await f.capture(c.id,launch);assert.equal(starts,1);assert.equal(f.service.data(c.id).ballMode,'gravity');
+  assert.deepEqual(f.service.data(c.id).capture.trajectory,simulateThrow({launch,cubes:f.objects.list('cube'),ballMode:'gravity',bpm:120}).trajectory);
+  const panel=f.service.panels(c.id)[0];Object.assign(getPlaybackInstance(panel.id),{active:true,startTick:0,endTick:Infinity});f.transport.currentTick=72;const position=f.service.view(c.id).ball;
+  f.transport.state='paused';assert.deepEqual(f.service.view(c.id).ball,position);f.transport.currentTick=0;assert.deepEqual(f.service.view(c.id).ball,{x:0,y:0});
+  f.transport.state='playing';f.transport.currentTick=217;await f.capture(c.id,launch);assert.equal(starts,1);assert.equal(f.transport.currentTick,217);
+  assert.ok(f.service.setAim(c.id,{x:0,y:-100}));assert.equal(f.service.data(c.id).ballMode,'gravity');assert.deepEqual(f.service.prediction(c.id),simulateThrow({launch:boardLaunch({x:0,y:0},{x:0,y:-100}),cubes:f.objects.list('cube'),ballMode:'gravity',bpm:120}).trajectory);
+ }finally{f.dispose();}
+});
+
+test('Gravity Cannon mode survives JSON restore, clear and shared deletion without owning receivers',async()=>{
+ const f=fixture();try{const cube=f.objects.addCube(0,200),c=f.create([],{ballMode:'gravity'});const ball=await f.capture(c.id,boardLaunch({x:0,y:0},{x:0,y:100}));f.service.setInstrument(c.id,'PIANO');
+  const saved=JSON.parse(JSON.stringify(f.containers.snapshot())),physical=JSON.parse(JSON.stringify(f.objects.authoredSnapshot()));f.objects.restore(physical);f.containers.restore(saved);f.service.migrateLegacy();
+  assert.equal(f.service.data(c.id).ballMode,'gravity');assert.equal(f.objects.get(ball.id).ballMode,'gravity');assert.equal(f.objects.get(ball.id).captureId,c.id);assert.equal(f.service.data(c.id).instrument,'PIANO');
+  f.service.clear(c.id);assert.equal(f.service.data(c.id).ballMode,'gravity');await f.service.throwBall(c.id);f.containers.remove(c.id);assert.equal(f.objects.get(ball.id),null);assert.ok(f.objects.get(cube.id));assert.equal(f.service.panels(c.id).length,0);
+ }finally{f.dispose();}
+});
+
+import {createStringSurfaceLoop} from '../src/string-surface-loop.js';
+for(const kind of ['drum','string','strum'])test(`Gravity Cannon transient ${kind} contact uses receiver-owned sound, feedback and no recording`,async()=>{
+ const receivers=kind==='drum'?createDrumObjects():createStringSurfaces(),receiver=kind==='drum'?receivers.create({x:0,y:200,instrument:'DRUM SNARE 1'}):receivers.create({kind,start:{x:-250,y:200},end:{x:250,y:200},instrument:'PIANO'}),events=[],feedback=[];let loop;
+ const f=fixture({extraReceivers:()=>receivers.list().map(boardCollisionBody),onReceiverTrigger:e=>loop.trigger(e)});Object.assign(f.transport,{id:MAIN_TRANSPORT_ID,tickToAudioTime:t=>t/192,audioTimeToTick:t=>t*192});
+ loop=kind==='drum'?createDrumLoopController({objects:receivers,getTransport:()=>f.transport,schedule:e=>events.push(e)}):createStringSurfaceLoop({objects:receivers,getTransport:()=>f.transport,schedule:e=>events.push(e)});loop.subscribe(e=>feedback.push(e));
+ try{const c=f.create([],{ballMode:'gravity'}),before=JSON.stringify(receivers.snapshot());await f.capture(c.id,boardLaunch({x:0,y:0},{x:0,y:100}));const hits=f.service.data(c.id).capture.collisions.filter(e=>e.cubeId===receiver.id);assert.ok(hits.length);assert.equal(f.service.panels(c.id)[0].__dgAuthoredNotes.length,0);
+  const hit=hits[0];f.transport.currentTick=Math.ceil(hit.timeSeconds*192);f.service.scheduleReceiverHits();f.service.scheduleReceiverHits();assert.equal(events.length,1);assert.equal(events[0].instrument,kind==='drum'?'DRUM SNARE 1':'PIANO');assert.equal(events[0].eventTick%48,0);f.transport.currentTick=hit.tick;loop.tick();assert.equal(feedback.length,1);assert.equal(JSON.stringify(receivers.snapshot()),before);
+ }finally{loop.destroy();f.dispose();}
+});
+
+test('expired Gravity Ball stays hidden until the next ordinary Cannon loop',async()=>{
+ const f=fixture();try{const c=f.create([],{ballMode:'gravity'});f.transport.bpm=30;f.service.setBars(c.id,4);const ball=await f.capture(c.id,boardLaunch({x:0,y:0},{x:100,y:0})),panel=f.service.panels(c.id)[0];Object.assign(getPlaybackInstance(panel.id),{active:true,startTick:0,endTick:Infinity});
+  const end=f.service.data(c.id).capture.trajectory.at(-1).tick;assert.ok(end<1536);f.transport.currentTick=end+1;assert.equal(f.service.ballView(f.objects.get(ball.id)).hidden,true);f.transport.currentTick=1536;assert.equal(f.service.ballView(f.objects.get(ball.id)).hidden,false);
+ }finally{f.dispose();}
+});
+
+for(const mode of ['normal','gravity'])test(`${mode} Cannon resolves current receiver chord/instrument/volume instead of captured sound snapshots`,async()=>{
+ const surfaces=createStringSurfaces(),surface=surfaces.create({start:{x:-200,y:200},end:{x:200,y:200},instrument:'KALIMBA'}),received=[];
+ const f=fixture({extraReceivers:()=>surfaces.list().map(boardCollisionBody),onReceiverTrigger:e=>received.push(e)});Object.assign(f.transport,{tickToAudioTime:t=>t/192,audioTimeToTick:t=>t*192});
+ try{const c=f.create([],{ballMode:mode});await f.capture(c.id,boardLaunch({x:-100,y:0},{x:-100,y:100}));const hit=f.service.data(c.id).capture.collisions[0];surfaces.update(surface.id,{mode:'chord',instrument:'PIANO',volume:.23});
+  f.transport.currentTick=Math.ceil(hit.timeSeconds*192);f.service.scheduleReceiverHits();f.service.scheduleReceiverHits();assert.equal(received.length,1);assert.deepEqual(received[0].sourceMidis,[64,69,74]);assert.equal(received[0].instrument,'PIANO');assert.equal(received[0].volume,.23);assert.equal(surfaces.get(surface.id).authoredState.recordedEvents.length,0);
+ }finally{f.dispose();}
+});
+
+test('legacy Cannon pitch-only records recover surface contact from trajectory and never become Cannon-owned notes',async()=>{
+ const surfaces=createStringSurfaces(),surface=surfaces.create({start:{x:-200,y:200},end:{x:200,y:200},mode:'chord',instrument:'PIANO'}),received=[];
+ const f=fixture({extraReceivers:()=>surfaces.list().map(boardCollisionBody),onReceiverTrigger:e=>received.push(e)});Object.assign(f.transport,{tickToAudioTime:t=>t/192,audioTimeToTick:t=>t*192});
+ try{const c=f.create();await f.capture(c.id,boardLaunch({x:-100,y:0},{x:-100,y:100}));const d=f.service.data(c.id);d.capture.collisions=d.capture.collisions.map(({contact,receiverCapabilities,...hit})=>({...hit,sourceMidi:36}));f.containers.setPresentation(c.id,{interactionData:d});
+  const state=bouncerGridState(d.capture,c.id,'WRONG TRIGGER',id=>surfaces.get(id));assert.equal(state.authoredNotes.length,0);
+  f.transport.currentTick=Math.ceil(d.capture.collisions[0].timeSeconds*192);f.service.scheduleReceiverHits();assert.equal(received.length,1);assert.deepEqual(received[0].sourceMidis,[64,69,74]);assert.equal(received[0].lane,0);assert.equal(received[0].region,2);assert.equal(received[0].instrument,'PIANO');
+ }finally{f.dispose();}
 });

@@ -415,8 +415,8 @@ function renderCatalog() {
     descEl.className = 'toy-spawner-description';
     descEl.textContent = entry.description || '';
 
-    const isBouncerMode=['physical-ball','physical-cube'].includes(entry.type);
-    if(isBouncerMode){decorateCircularControl(card,{label:entry.name,icon:entry.type==='physical-cube'?'cube':'throw'});card.classList.add('bouncer-mode-button');card.append(nameEl);}else card.append(nameEl,descEl);
+    const isBouncerMode=['physical-ball','physical-gravity-ball','physical-cube'].includes(entry.type);
+    if(isBouncerMode){decorateCircularControl(card,{label:entry.name,icon:entry.type==='physical-cube'?'cube':'throw'});card.classList.add('bouncer-mode-button');if(entry.type==='physical-gravity-ball')card.classList.add('gravity-ball-tool');card.append(nameEl);}else card.append(nameEl,descEl);
     if(grouped){card.setAttribute('aria-label',entry.name);card.title=entry.description||entry.name;state.creationButtons.push({card,entry});}
 
     const isDisabled = !!entry.disabled;

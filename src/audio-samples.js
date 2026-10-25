@@ -290,7 +290,7 @@ export async function initAudioAssets(csvUrl='./samples.csv'){
   // Build entries and decode buffers
   const csvBase = new URL(csvUrl, window.location.href);
   const csvDir = csvBase.href.substring(0, csvBase.href.lastIndexOf('/') + 1);
-  const sampleBaseDir = new URL('./assets/samples/', window.location.href).href;
+  const sampleBaseDir = new URL('../assets/samples/', import.meta.url).href;
 
   for (const line of lines){
     const parts = line.split(',');

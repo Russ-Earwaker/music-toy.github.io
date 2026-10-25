@@ -40,3 +40,12 @@ body.bouncer-board-armed .board-viewport { cursor:crosshair; }
 .physical-cube::before { content:''; position:absolute; inset:2px 2px auto; height:35%; background:#ffffff1f; pointer-events:none; }
 .physical-cube::after { content:''; position:absolute; inset:0; width:auto; height:auto; border-radius:0; background:#fff; opacity:var(--cube-flash,0); pointer-events:none; }
 .physical-path-prediction { fill:none; stroke:#a0edff88; stroke-width:2; stroke-dasharray:8 6; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+
+/* Gravity is a Cannon mode; the down marking supplements its shared silhouette. */
+.container-toy[data-ball-mode="gravity"]>header::after{content:'\2193';position:absolute;left:6px;top:4px;color:#ffe1ab;font:900 24px system-ui;pointer-events:none}
+.physical-ball[data-ball-mode="gravity"]{color:#182d38;font:900 18px/1 system-ui;display:grid;place-items:center;border:2px solid #ffd49b;background:#fff1d8}
+.physical-ball[hidden]{display:none}
+.gravity-ball-tool::after{content:'\2193';position:absolute;right:2px;bottom:0;color:#ffe1ab;font:900 24px system-ui;pointer-events:none}
+.gravity-ball-tool .toy-spawner-name{width:78px;white-space:normal;text-align:center;line-height:1.1}
+
+.gravity-ball-tool .cannon-tool-label{width:70px;white-space:normal;text-align:center}

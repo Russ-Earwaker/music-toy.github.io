@@ -33,6 +33,17 @@ function fixture(){
  const drag=async(target,a,b)=>{await dispatch('pointerdown',target,...a);await dispatch('pointermove',target,...b);await dispatch('pointerup',target,...b);};
  return {controller,board,objects,calls,handles,nodes,world,drag,dispatch,dispose(){board.dispose();Object.assign(globalThis,old);}};
 }
+
+test('Gravity Ball shares creation ownership and curved preview, commits gravity mode only on release',async()=>{
+ const f=fixture();try{
+  f.board.arm({mode:'gravity',seed:false});assert.equal(f.board.activeMode,'gravity');assert.equal(f.objects.list('ball').length,0);
+  await f.dispatch('pointerdown',f.world,100,200);await f.dispatch('pointermove',f.world,300,200);assert.equal(f.calls.length,0);
+  const preview=f.world.children[0].children[0].children.find(n=>n.className.includes('physical-creation-prediction'));
+  const expected=simulateThrow({launch:{x:50,y:100,vx:840,vy:0},cubes:[],ballMode:'gravity',bpm:120}).trajectory.map(p=>`${p.x},${p.y}`).join(' ');assert.equal(preview.getAttribute('points'),expected);
+  await f.dispatch('pointerup',f.world,300,200);assert.equal(f.calls.length,1);assert.equal(f.calls[0].ballMode,'gravity');const ball=f.objects.list('ball')[0];assert.equal(ball.ballMode,'gravity');assert.equal(f.nodes().find(n=>n.id===ball.id).textContent.charCodeAt(0),8595);
+  assert.equal(preview.getAttribute('points'),'');
+ }finally{f.dispose();}
+});
 test('Ball mode only arms; valid release fires one ball, retains mode and board logical endpoints',async()=>{
  const f=fixture();try{f.board.arm({mode:'ball',seed:false});assert.equal(f.objects.list().length,0);
  f.board.arm({mode:'ball',seed:false});assert.equal(f.board.active,false);await f.drag(f.world,[100,200],[300,200]);assert.equal(f.calls.length,0);

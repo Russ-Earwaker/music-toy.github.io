@@ -1,3 +1,6 @@
+import {stringSurfaces,stringSegments} from './string-surface.js';
+import {createStringSurfaceLoop} from './string-surface-loop.js';
+import {installStringSurfaceBoard} from './string-surface-board.js';
 import {seedTriggerCubes,triggerCreationPoint} from './trigger-starter-cubes.js';
 import {installRippleConnections} from './simple-ripple-connections.js';
 import {createLoopingRippleController} from './simple-ripple-loop.js';
@@ -2168,9 +2171,12 @@ const toyCatalog = [
     { type: 'simple-draw', name: 'Paint', simpleCategory:'loop', isCreationActive:()=>document.body.classList.contains('simple-draw-creating'), description: 'Draw on the board. Release to make a Simple Draw toy.', size: { width: 640, height: 440 }, action:()=>{g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.arm();return true;} },
     { type: 'simple-drum', name: 'Drum', simpleCategory:'play', isCreationActive:()=>document.body.classList.contains('simple-drum-armed'), description:'Tap the board to place drums. Tap a drum to record a looping hit; drag to move.', size:{width:104,height:104}, action:()=>{g_drumBoard.arm();return true;} },
     { type: 'simple-drum-set', name: 'Drum Set', simpleCategory:'play', simpleOrder:1, description:'Create six independent drums in a compact kit.', action:()=>{g_drumBoard.createSet();return true;} },
-    { type: 'simple-ripple', name: 'Ripple', simpleCategory:'trigger', simpleOrder:1, isCreationActive:()=>document.body.classList.contains('simple-ripple-armed'), description: 'Tap the board to send a musical wave.', size:{width:76,height:76}, action:()=>{g_rippleBoard.arm();return true;} },
+    {type:'simple-string',name:'String',simpleCategory:'play',simpleOrder:2,isCreationActive:()=>g_stringBoard.activeKind==='string',description:'Drag out one string. Pluck regions to record a loop.',action:()=>{g_stringBoard.arm('string');return true;}},
+    {type:'simple-strum',name:'Strum',simpleCategory:'play',simpleOrder:3,isCreationActive:()=>g_stringBoard.activeKind==='strum',description:'Drag out four strings. Swipe across them to record a strum.',action:()=>{g_stringBoard.arm('strum');return true;}},
+    { type: 'simple-ripple', name: 'Ripple', simpleCategory:'trigger', simpleOrder:2, isCreationActive:()=>document.body.classList.contains('simple-ripple-armed'), description: 'Tap the board to send a musical wave.', size:{width:76,height:76}, action:()=>{g_rippleBoard.arm();return true;} },
     { type: 'simple-bouncer', name: 'Simple Bouncer', description: 'Scatter cubes, then drag across the board to throw a ball.', action:()=>{activateBoardBouncer();return true;} },
     { type: 'physical-cube', name: 'Cube', simpleCategory:'place', isCreationActive:()=>window.BouncerBoard?.activeMode==='cube', description: 'Tap empty board space to place shared cubes.', size:{width:58,height:58} },
+    { type:'physical-gravity-ball',name:'Gravity Ball',simpleCategory:'trigger',simpleOrder:1,isCreationActive:()=>window.BouncerBoard?.activeMode==='gravity',description:'Swipe to launch a falling, bouncing ball.',size:{width:26,height:26} },
     { type: 'physical-ball', name: 'Ball', simpleCategory:'trigger', simpleOrder:0, isCreationActive:()=>window.BouncerBoard?.activeMode==='ball', description: 'Draw a throw on empty board space.', size:{width:26,height:26} },
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 800, height: 760 } },
     { type: 'loopgrid', name: 'Simple Rhythm', description: 'Make a simple one-note percussion pattern.', size: { width: 420, height: 420 } },
@@ -2205,7 +2211,7 @@ function setExperimentalEnabled(enabled) {
 
 function getToyCatalog() {
     const experimentalOn = isExperimentalEnabled();
-    return toyCatalog.filter(entry=>!['simple-draw','simple-bouncer','simple-ripple','simple-drum','simple-drum-set','physical-cube','physical-ball'].includes(entry.type)||!g_artInternal.active)
+    return toyCatalog.filter(entry=>!['simple-draw','simple-bouncer','simple-ripple','simple-drum','simple-drum-set','simple-string','simple-strum','physical-cube','physical-ball','physical-gravity-ball'].includes(entry.type)||!g_artInternal.active)
     .filter(entry=>!entry.type.startsWith('physical-')||uiMode.isSimple()||window.BouncerBoard?.isRelevant?.()).map((entry) => {
         if (EXPERIMENTAL_TOYS.includes(entry.type)) {
             return { ...entry, disabled: entry.disabled && !experimentalOn };
@@ -5972,14 +5978,15 @@ function createToyPanelAt(toyType, {
     artOwnerId = null,
 } = {}) {
     const type = String(toyType || '').toLowerCase();
+    if(type==='simple-string'||type==='simple-strum'){if(artOwnerId||g_artInternal.active)return null;g_stringBoard.arm(type==='simple-string'?'string':'strum');return null;}
     if(type==='simple-drum'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.arm();return null;}
     if(type==='simple-drum-set'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.createSet();return null;}
     if(type==='simple-ripple'){if(artOwnerId||g_artInternal.active)return null;g_rippleBoard.arm();return null;}
     if(type==='simple-draw'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.arm({heartbeatId});return null;}
     if(type==='simple-bouncer'){if(artOwnerId||g_artInternal.active)return null;activateBoardBouncer();return null;}
-    if(type==='physical-cube'||type==='physical-ball'){
+    if(type==='physical-cube'||type==='physical-ball'||type==='physical-gravity-ball'){
       if(artOwnerId||g_artInternal.active)return null;
-      g_drumBoard.cancel();g_rippleBoard.cancel();g_simpleDrawCreation.cancel();g_bouncerBoard.arm({mode:type==='physical-cube'?'cube':'ball',seed:type==='physical-ball'});return null;
+      g_drumBoard.cancel();g_rippleBoard.cancel();g_simpleDrawCreation.cancel();g_bouncerBoard.arm({mode:type==='physical-cube'?'cube':type==='physical-gravity-ball'?'gravity':'ball',seed:type!=='physical-cube'});return null;
     }
     g_bouncerBoard.cancel();
     if (!type || !toyInitializers[type]) {
@@ -6821,7 +6828,7 @@ const g_graphPlacement = createGraphPlacement({
   },
   setPosition: (id,x,y) => {
     // Free board instruments retain their authored physical placement.
-    if(drumObjects.get(id)||rippleObjects.get(id))return;
+    if(drumObjects.get(id)||rippleObjects.get(id)||stringSurfaces.get(id))return;
     if(containerToyModel.get(id)){const c=containerToyModel.get(id);g_layoutAnimation.move(id,c.bounds,{x,y});containerToyModel.move(id,x,y);return;}
     const s=structureToyModel.get(id);
     if(s){g_layoutAnimation.move(id,s,{x,y});structureToyModel.move(id,x,y,{manual:false});return;}
@@ -6859,7 +6866,7 @@ let g_layoutQueued=false,g_layoutRestoring=false,g_layoutManualDrag=null;
 function requestGraphLayout(id,connectionId=null){
   if(g_layoutRestoring||connectionModel.getEditing()?.suspended||!id)return;
   const target=connectionId?connectionModel.get(connectionId)?.to.objectId:id,owner=containerToyModel.owner(target)||target;
-  if(drumObjects.get(target)||rippleObjects.get(target))return;
+  if(drumObjects.get(target)||rippleObjects.get(target)||stringSurfaces.get(target))return;
   if(containerToyModel.get(owner)?.interactionData?.contentSpace)return;
   if(!containerToyModel.isVisible(id))id=containerToyModel.owner(id);
   // Balance the connected branch up to its stable/manual anchor, never another
@@ -7020,6 +7027,7 @@ window.clearCreationGraph = () => {
   boardPhysicalObjects.clear();
   rippleObjects.clear();
   drumObjects.clear();
+  stringSurfaces.clear();
   g_toyInstances.pause();g_structureInstances.pause();
   window.ToySpawner?.close?.();
   closeInstrumentPicker();
@@ -7070,12 +7078,13 @@ const g_connectionView = createConnectionView({
       window.ToySpawner?.open?.();
     },
   }),
-  getPanels: () => [...g_connectionPanels,...document.querySelectorAll('.container-toy[data-open="false"],.simple-ripple-object,.simple-drum-object')],
+  getPanels: () => [...g_connectionPanels,...document.querySelectorAll('.container-toy[data-open="false"],.simple-ripple-object,.simple-drum-object,.string-surface-object')],
   getConnections: () => containerToyModel.connections(),
   presentEndpoint: containerToyModel.presentedEndpoint,
   canEditConnection: containerToyModel.canEditConnection,
   canCopyStructure: id=>!containerToyModel.owner(id),
   getToyPoint: (panel,side) => {
+    const string=stringSurfaces.get(panel.id);if(string){const start=stringSegments(string)[0].a;return {x:start.x-43,y:start.y};}
     const drum=drumObjects.get(panel.id);if(drum)return {x:drum.transform.x-52,y:drum.transform.y};
     const ripple=rippleObjects.get(panel.id);
     if(ripple)return {x:ripple.transform.x-38,y:ripple.transform.y};
@@ -7179,12 +7188,15 @@ const g_simpleToyMusic={
  getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),
  onChanged:()=>{g_chainStructureVersion++;updateChains();window.Persistence?.markDirty?.();},onPlay:()=>tickAudioScheduler(),
 };
-const g_simpleDraw=createSimpleDrawController(g_simpleToyMusic);
-const getBoardCollisionObjects=()=>[...boardPhysicalObjects.list('cube'),...drumObjects.list().map(boardCollisionBody).filter(Boolean)];
+const g_simpleDraw=createSimpleDrawController({...g_simpleToyMusic,
+ readAudioSettings:p=>({volume:getToyVolumeRaw(p.__audioToyId||p.id),muted:isToyMuted(p.__audioToyId||p.id)}),
+ applyAudioSettings:(p,{volume,muted})=>{const id=p.__audioToyId||p.id;setToyVolume(id,volume);setToyMuted(id,muted);Object.assign(p.dataset,{toyVolume:String(volume),toyMuted:muted?'1':'0'});syncVolumeUI(p,{volume,muted});},
+});
+const getBoardCollisionObjects=()=>[...boardPhysicalObjects.list('cube'),...[...drumObjects.list(),...stringSurfaces.list()].map(boardCollisionBody).filter(Boolean)];
 const g_simpleBouncer=createSimpleBouncerController({...g_simpleToyMusic,
  getCollisionObjects:getBoardCollisionObjects,
- subscribeReceivers:fn=>drumObjects.subscribe(e=>fn(e.type==='restore'?e:{...e,object:boardCollisionBody(e.object),previous:e.previous&&boardCollisionBody(e.previous)})),
- onReceiverTrigger:event=>g_drumLoop.trigger(event),
+ subscribeReceivers:fn=>{const forward=e=>fn(e.type==='restore'?e:{...e,object:boardCollisionBody(e.object),previous:e.previous&&boardCollisionBody(e.previous)});const a=drumObjects.subscribe(forward),b=stringSurfaces.subscribe(forward);return ()=>{a();b();};},
+ onReceiverTrigger:event=>performSimpleReceiver(event),
  applyGrid:async(panel,state)=>{cancelSimpleToySources(panel);g_sequencerScheduler?.resetToyTimeline(panel.id,transportRegistry.get(connectionModel.getTransportId(panel.id))?.currentTick||0,{includeBoundary:false});await panel.__drawToy.setState(state);},
 });
 window.SimpleBouncer=g_simpleBouncer;
@@ -7201,16 +7213,17 @@ g_containerPresentations.register('simple-bouncer',{
 const g_receiverResponses=createReceiverResponses();
 g_simpleBouncer.receiverResponses=()=>g_receiverResponses.responses();
 const g_bouncerBoard=installBoardBouncer({objects:boardPhysicalObjects,controller:g_simpleBouncer,
+ onArm:()=>{g_drumBoard.cancel();g_rippleBoard.cancel();g_simpleDrawCreation.cancel();g_stringBoard.cancel();},
  getCollisionObjects:getBoardCollisionObjects,
  getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
  getBpm:id=>transportRegistry.get(id?connectionModel.getTransportId(id):heartbeatModel.target().transportId)?.bpm||120,
  canInteract:()=>!g_artInternal.active,
  unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
  onRelevant:()=>window.ToySpawner?.configure?.({getCatalog:()=>getToyCatalog()}),
- createCapture:async({containerId,ballId,launch,release})=>{
+ createCapture:async({containerId,ballId,launch,release,ballMode})=>{
   let c=containerToyModel.get(containerId),created=false;
   if(!c){
-   c=g_simpleBouncer.create({x:launch.x,y:launch.y});created=true;
+   c=g_simpleBouncer.create({x:launch.x,y:launch.y,ballMode});created=true;
    const result=connectionModel.connect('transport',{objectId:heartbeatModel.target().id,portId:'output'},{objectId:c.id,portId:'input'});
    if(!result.ok){containerToyModel.remove(c.id);throw Error(result.reason);}
   }
@@ -7218,7 +7231,7 @@ const g_bouncerBoard=installBoardBouncer({objects:boardPhysicalObjects,controlle
   catch(error){if(created)containerToyModel.remove(c.id);throw error;}
  },
 });
-window.BoardObjects=createBoardObjectLayer({objects:boardPhysicalObjects,containers:containerToyModel,ripples:rippleObjects,drums:drumObjects,
+window.BoardObjects=createBoardObjectLayer({objects:boardPhysicalObjects,containers:containerToyModel,ripples:rippleObjects,drums:drumObjects,strings:stringSurfaces,
  artPanels:()=>Array.from(document.querySelectorAll('.art-toy-panel:not(.internal-art-anchor-ghost)')),
  createCannon:options=>g_simpleBouncer.create(options),createPaint:options=>g_simpleDraw.create(options),
  createArt:options=>window.ArtToyFactory.create('flashCircle',options),removeArt:panel=>panel&&destroyArtToyPanel(panel)});
@@ -7228,7 +7241,7 @@ boardPhysicalObjects.subscribe(()=>window.Persistence?.markDirty?.());
 const g_simpleRipple=createLoopingRippleController({objects:rippleObjects,getReceivers:()=>window.BoardObjects.list(),
  isReceiverDragging:id=>!!boardPhysicalObjects.get(id)?.drag,
  getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),
- schedule:event=>{if(event.soundSource==='receiver'){g_drumLoop.trigger(event);return;}setToyVolume(event.emitterId,event.volume);setToyMuted(event.emitterId,event.muted);triggerInstrument(event.instrument,transposeNote('C4',event.sourceMidi-60),event.when,event.emitterId,{eventTick:event.eventTick,pitched:true,pitchShift:true});},
+ schedule:event=>{if(event.soundSource==='receiver'){performSimpleReceiver(event);return;}setToyVolume(event.emitterId,event.volume);setToyMuted(event.emitterId,event.muted);triggerInstrument(event.instrument,transposeNote('C4',event.sourceMidi-60),event.when,event.emitterId,{eventTick:event.eventTick,pitched:true,pitchShift:true});},
  respond:(event,transport)=>g_receiverResponses.enqueue(event,transport),
  cancel:id=>{cancelScheduledToySources(id);bumpToyAudioGen(id,'board-interaction-reset');g_receiverResponses.clear(id);},
 });
@@ -7236,10 +7249,11 @@ installRippleConnections({objects:rippleObjects,model:connectionModel,getHeartbe
 boardPhysicalObjects.subscribe(event=>{if(event.type==='add'||event.type==='update')g_simpleRipple.tick();});
 connectionModel.subscribe(()=>g_simpleRipple.tick());
 const g_rippleBoard=installSimpleRippleBoard({objects:rippleObjects,controller:g_simpleRipple,
+ getCubes:()=>boardPhysicalObjects.list('cube'),
  getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
  seedCubes:()=>seedTriggerCubes({objects:boardPhysicalObjects,center:triggerCreationPoint({viewport:getViewportElement(),screenToWorld}),otherReceivers:drumObjects.list()}),
  now:()=>ensureAudioContext().currentTime,unlock:resumeAudioContextIfNeeded,canInteract:()=>!g_artInternal.active,
- onArm:()=>{g_drumBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
+ onArm:()=>{g_drumBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();g_stringBoard.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
 });
 uiMode.subscribe(()=>g_rippleBoard.cancel());
 const g_simplePlayable=createBoardPlayableController({objects:drumObjects,getTime:()=>ensureAudioContext().currentTime,
@@ -7249,6 +7263,13 @@ const g_drumLoop=createDrumLoopController({objects:drumObjects,getTransport:id=>
  schedule:event=>{setToyVolume(event.sourceId,event.volume);setToyMuted(event.sourceId,event.muted);triggerInstrument(event.instrument,transposeNote('C4',event.sourceMidi-60),event.when,event.sourceId,{eventTick:event.eventTick,pitchShift:true,musicalRole:'percussion'});},
  cancel:id=>{cancelScheduledToySources(id);bumpToyAudioGen(id,'drum-loop-invalidate');},release:releaseToyAudioBus,
 });
+function performSimpleReceiver(event){return stringSurfaces.get(event.receiverId)?g_stringLoop.trigger(event):g_drumLoop.trigger(event);}
+const g_stringLoop=createStringSurfaceLoop({objects:stringSurfaces,getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),getTriggerTransport:id=>transportRegistry.get(id),
+ schedule:event=>{setToyVolume(event.sourceId,event.volume);setToyMuted(event.sourceId,event.muted);for(const midi of event.sourceMidis||[event.sourceMidi])triggerInstrument(event.instrument,transposeNote('C4',midi-60),event.when,event.sourceId,{eventTick:event.eventTick,pitched:true,pitchShift:true,musicalRole:'melody'});},
+ cancel:id=>{cancelScheduledToySources(id);bumpToyAudioGen(id,'string-surface-invalidate');},release:releaseToyAudioBus,
+});
+installRippleConnections({objects:stringSurfaces,model:connectionModel,getHeartbeat:()=>heartbeatModel.target()});
+connectionModel.subscribe(()=>g_stringLoop.tick());
 installRippleConnections({objects:drumObjects,model:connectionModel,getHeartbeat:()=>heartbeatModel.target()});
 connectionModel.subscribe(()=>g_drumLoop.tick());
 // Canonical board geometry plus normal panel bounds; no screen-pixel conversion.
@@ -7268,7 +7289,7 @@ function drumSetPlacementBounds(){
  return bounds;
 }
 const g_drumBoard=installSimpleDrumBoard({objects:drumObjects,controller:{...g_drumLoop,activate:g_simplePlayable.activate},getPlacementBounds:drumSetPlacementBounds,getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
- unlock:resumeAudioContextIfNeeded,canInteract:()=>!g_artInternal.active,onArm:()=>{g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
+ unlock:resumeAudioContextIfNeeded,canInteract:()=>!g_artInternal.active,onArm:()=>{g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();g_stringBoard.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
 });
 uiMode.subscribe(()=>g_drumBoard.cancel());
 function activateBoardBouncer(){g_drumBoard.cancel();g_rippleBoard.cancel();g_simpleDrawCreation.cancel();return g_bouncerBoard.arm();}
@@ -7278,14 +7299,16 @@ g_containerPresentations.register('simple-draw',{
   let surface=g_simpleDrawSurfaces.get(c.id);
   if(!surface){const api={lines:()=>{const line=g_simpleDraw.line(c.id);return line?[line]:[];},
    unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
-   addLine:source=>({id:c.id,started:g_simpleDraw.draw(c.id,source)}),clear:()=>g_simpleDraw.clear(c.id),
+   armDraw:()=>{g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.arm({containerId:c.id,delay:250});},
+   isDrawing:()=>g_simpleDraw.isPending(c.id)||(g_simpleDrawCreation.active&&g_simpleDrawCreation.targetId===c.id),
+   clear:()=>{if(g_simpleDrawCreation.targetId===c.id)g_simpleDrawCreation.cancel();return g_simpleDraw.clear(c.id);},
    setSilence:g_simpleDraw.setSilence,setStraightened:(id,value)=>{const s=ensureSimpleDrawSpace(id);g_simpleDraw.setStraightened(id,value);const current=containerToyModel.get(id);if(s){moveSimpleDrawContent(id,{...s,x:current.bounds.x+s.x,y:current.bounds.y+s.y},0,0);containerToyModel.commitContainerBounds(id);}},onNote:listener=>g_simpleDraw.onNote(c.id,listener),
    getGeometry:()=>{const space=g_simpleDraw.data(c.id).contentSpace;return space?{...space,x:space.x-SIMPLE_DRAW_INSETS.left,y:space.y-SIMPLE_DRAW_INSETS.top}:null;},
   };
    surface=installSimpleDrawSurface(host,api,g_simpleDraw.paintStore(c.id));g_simpleDrawSurfaces.set(c.id,surface);
   }surface.setActive(!c.presentation.state.open);
  },
- disposeSurface:id=>{g_simpleDrawSurfaces.get(id)?.dispose();g_simpleDrawSurfaces.delete(id);g_simpleDraw.dispose(id);},
+ disposeSurface:id=>{if(g_simpleDrawCreation.targetId===id)g_simpleDrawCreation.cancel();g_simpleDrawSurfaces.get(id)?.dispose();g_simpleDrawSurfaces.delete(id);g_simpleDraw.dispose(id);},
 });
 refreshSimpleDrawSilence=()=>{for(const surface of g_simpleDrawSurfaces.values())surface.syncSilence();};
 function ensureSimpleDrawSpace(id){
@@ -7302,15 +7325,23 @@ function moveSimpleDrawContent(id,base,dx,dy){
 }
 function tidySimpleContainer(id){const result=g_layoutAnimation.batch(()=>g_graphPlacement.repairAround(id));g_connectionView.render();window.Persistence?.markDirty?.();if(result.unresolved.length){const notice=document.createElement('p');notice.className='simple-draw-creation-hint';notice.setAttribute('role','status');notice.textContent='This space is crowded. Your drawing stayed in place; move a nearby toy to make more room.';document.body.append(notice);setTimeout(()=>notice.remove(),6000);}return result;}
 const g_simpleDrawCreation=installSimpleDrawCreation({getViewport:getViewportElement,getWorld:()=>document.getElementById('board'),screenToWorld,
+ onArm:()=>{g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_stringBoard.cancel();},
  canCreate:()=>!g_artInternal.active,
  unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
- commit:async({source,bounds,contentSpace},{heartbeatId=heartbeatModel.target().id}={})=>{
-  const c=g_simpleDraw.create(bounds);g_simpleDraw.setData(c.id,{contentSpace});
-  try{const previous=g_layoutRestoring;g_layoutRestoring=true;try{const result=connectionModel.connect('transport',{objectId:heartbeatId,portId:'output'},{objectId:c.id,portId:'input'});if(!result.ok)throw new Error(result.reason);}finally{g_layoutRestoring=previous;}
+ commit:async(prepared,{heartbeatId=heartbeatModel.target().id,containerId}={})=>{
+  const created=!containerId,c=created?g_simpleDraw.create(prepared.bounds):containerToyModel.get(containerId);
+  if(!c||c.presentation.type!=='simple-draw')return;
+  try{if(created){const previous=g_layoutRestoring;g_layoutRestoring=true;try{const result=connectionModel.connect('transport',{objectId:heartbeatId,portId:'output'},{objectId:c.id,portId:'input'});if(!result.ok)throw new Error(result.reason);}finally{g_layoutRestoring=previous;}}
    const card=document.getElementById(c.id);card?.classList.add('simple-draw-materializing');setTimeout(()=>card?.classList.remove('simple-draw-materializing'),220);
-   tidySimpleContainer(c.id);await g_simpleDraw.draw(c.id,source);
-  }catch(error){if(error.code==='DRAWING_CANCELLED')return;containerToyModel.remove(c.id);throw error;}
+   await g_simpleDraw.drawPrepared(c.id,prepared);if(containerToyModel.get(c.id)&&g_simpleDraw.line(c.id))tidySimpleContainer(c.id);
+  }catch(error){if(error.code==='DRAWING_CANCELLED')return;if(created)containerToyModel.remove(c.id);else if(error.code!=='DRAWING_EXISTS')g_simpleDraw.clear(c.id);throw error;}
  }});
+const g_stringBoard=installStringSurfaceBoard({objects:stringSurfaces,controller:g_stringLoop,getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,unlock:resumeAudioContextIfNeeded,canInteract:()=>!g_artInternal.active,
+ onArm:()=>{g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
+});
+window.StringSurfaces=stringSurfaces;window.StringSurfaceLoop=g_stringLoop;
+uiMode.subscribe(()=>g_stringBoard.cancel());
+document.addEventListener('toy-spawner:palette-change',()=>g_stringBoard.cancel());
 const g_containerBoard=installContainerBoard({
  mountVolume:(host,panel)=>installContainerVolumeUI(host,panel,{containers:containerToyModel,getToy:id=>document.getElementById(id)}),
  containers:containerToyModel,getWorld:()=>document.getElementById('board'),getScale:()=>getViewportTransform().scale,
@@ -7625,7 +7656,7 @@ try {
       const tick = Number(detail.positionTick ?? detail.toTick ?? detail.tick) || 0;
       const scheduler = ensureSequencerScheduler();
       g_simpleRipple.transportChanged(id,detail.type);
-      g_drumLoop.transportChanged(id,detail.type,detail.fromState);g_simpleBouncer.resetReceiverAdmissions();
+      g_drumLoop.transportChanged(id,detail.type,detail.fromState);g_stringLoop.transportChanged(id,detail.type,detail.fromState);g_simpleBouncer.resetReceiverAdmissions();
       // Deliver already-sounding notes before invalidating future lookahead.
       // A seek has already rebased the clock, so use its captured outgoing tick.
       if (['pause', 'seek', 'tempo'].includes(detail.type))
@@ -7686,7 +7717,7 @@ function tickAudioScheduler() {
   g_audioTickBusy = true;
   try {
     if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
-    g_simpleBouncer.scheduleReceiverHits();g_simpleRipple.tick();g_drumLoop.tick();
+    g_simpleBouncer.scheduleReceiverHits();g_simpleRipple.tick();g_drumLoop.tick();g_stringLoop.tick();
     if (!transportRegistry.list().some(({transport}) => transport.state === 'playing')) return;
     refreshSimpleDrawSilence();
     const nowMs = performance.now();

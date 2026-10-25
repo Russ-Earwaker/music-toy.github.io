@@ -60,3 +60,46 @@ test('the physical mend transition returns to the exact original curve',()=>{
  const motion=new Map([[node.id,{cut:false,cutAt:0,mendAt:1000}]]);
  assert.notDeepEqual(stringSegments(source,0,520,1,motion,1100),original);assert.deepEqual(stringSegments(source,0,520,1,motion,1350),original);
 });
+
+const sparseNodes=()=>[0,400,800].map((x,i)=>({lineId:'a',id:'s'+i,x,y:100,progress:i/2}));
+const sparsePaths=[{lineId:'a',segments:[[{x:0,y:100,progress:0},{x:800,y:100,progress:1}]]}];
+function liveStroke(points,ns=sparseNodes(),ps=sparsePaths){
+ const s=createScissorsStroke(points[0]),hits=[];
+ for(const p of points.slice(1)){
+  const live=s.add(p,ns,ps);hits.push(...live);
+  for(const hit of live)ns.find(n=>n.id===hit.id).scissorMuted=true;
+ }
+ return {s,hits,ns,ps};
+}
+test('one-unit midpoint steps cut while held at contact; release emits no backlog',()=>{
+ const ns=sparseNodes(),s=createScissorsStroke({x:200,y:50});let hits=[];
+ for(let y=51;y<=100;y++)hits.push(...s.add({x:200,y},ns,sparsePaths));
+ assert.deepEqual(hits.map(n=>n.id),['s0']);
+ for(let y=101;y<=150;y++)assert.deepEqual(s.add({x:200,y},ns,sparsePaths),[]);
+ assert.deepEqual(s.finish(ns,sparsePaths),[]);
+ const fast=liveStroke([{x:200,y:50},{x:200,y:150}]);assert.deepEqual(fast.hits.map(n=>n.id),hits.map(n=>n.id));
+});
+test('one held gesture cuts distinct crossings and suppresses local repeats',()=>{
+ const {s,hits,ns,ps}=liveStroke([{x:170,y:50},{x:170,y:150},{x:170,y:50},{x:600,y:50},{x:600,y:150}]);
+ assert.deepEqual(hits.map(n=>n.id),['s0','s1']);assert.deepEqual(s.finish(ns,ps),[]);
+});
+test('live sparse crossings preserve canonical IDs in coiled and uncoiled views',()=>{
+ const source=createLineSource([{x:.1,y:.5},{x:.4,y:.2},{x:.7,y:.8},{x:.9,y:.5}]);
+ source.events.forEach((n,i)=>n.id='canonical-'+i);
+ for(const morph of [0,1]){
+  const segments=stringSegments(source,morph,300).map(s=>s.map(p=>({...p,x:p.x*600,y:p.y*300})));
+  const edge=segments[0],i=Math.floor(edge.length/2),a=edge[i-1],b=edge[i],target={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+  const length=Math.hypot(b.x-a.x,b.y-a.y),normal={x:-(b.y-a.y)/length,y:(b.x-a.x)/length};
+  const ns=[source.events[0],source.events.at(-1)].map((n,i)=>({...n,lineId:'a',x:i?600:0,y:-1000,progress:i}));
+  const points=Array.from({length:81},(_,j)=>({x:target.x+normal.x*(j-40),y:target.y+normal.y*(j-40)}));
+  const result=liveStroke(points,ns,[{lineId:'a',segments}]);assert.equal(result.hits.length,1);assert.ok(ns.some(n=>n.id===result.hits[0].id));assert.deepEqual(result.s.finish(ns,result.ps),[]);
+ }
+});
+test('a tiny live crossing is resolved without waiting for swipe slop or release',()=>{
+ const {s,hits,ns,ps}=liveStroke([{x:170,y:99},{x:170,y:101}]);
+ assert.equal(s.isSwipe,false);assert.equal(s.hasCuts,true);assert.equal(hits.length,1);assert.deepEqual(s.finish(ns,ps),[]);
+});
+test('an earlier direct cut does not suppress a later distinct spline crossing',()=>{
+ const {hits}=liveStroke([{x:0,y:50},{x:0,y:150},{x:600,y:150},{x:600,y:50}]);
+ assert.deepEqual(hits.map(n=>n.id),['s0','s1']);
+});

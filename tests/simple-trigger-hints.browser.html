@@ -1,0 +1,70 @@
+<!doctype html><meta charset="utf-8"><title>Simple DRAW TAP SWIPE teaching</title>
+<link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../free-play.css"><link rel="stylesheet" href="../simple-ripple.css"><link rel="stylesheet" href="../simple-bouncer.css">
+<style>body{margin:0;background:#10232d;color:white}#viewport{position:relative;width:1200px;height:760px;overflow:hidden}#world{position:absolute;inset:0;transform-origin:0 0}#results{white-space:pre-wrap}</style>
+<pre id="results">Running</pre><div id="viewport"><div id="world"></div></div>
+<script type="module">
+import {installSimpleRippleBoard} from '../src/simple-ripple-board.js';
+import {createRippleObjects} from '../src/simple-ripple.js';
+import {createLoopingRippleController} from '../src/simple-ripple-loop.js';
+import {createBoardPhysicalObjects} from '../src/board-physical-objects.js';
+import {installBoardBouncer} from '../src/board-bouncer.js';
+import {installSimpleDrawCreation} from '../src/simple-draw-creation.js';
+import {seedTriggerCubes,triggerCreationPoint} from '../src/trigger-starter-cubes.js';
+import {createSimpleInteractionHint,createBoardInteractionHint} from '../src/simple-interaction-hint.js';
+let count=0;const check=(v,m)=>{if(!v)throw Error(m);count++;};const frame=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+try{
+ const viewport=document.querySelector('#viewport'),world=document.querySelector('#world');let zoom=1,unlocks=0,paintCommits=0;
+ const screenToWorld=e=>{const r=viewport.getBoundingClientRect();return {x:((e.x??e.clientX)-r.left)/zoom,y:((e.y??e.clientY)-r.top)/zoom};};
+ const physical=createBoardPhysicalObjects(),ripples=createRippleObjects(),events=[],captures=[];
+ const transport={id:'test',state:'playing',currentTick:0,bpm:120,tickToAudioTime:t=>t/192,audioTimeToTick:t=>t*192};
+ const rippleController=createLoopingRippleController({objects:ripples,getReceivers:()=>physical.list('cube').map(c=>c.boardObject),getTransport:()=>transport,schedule:e=>events.push(e)});
+ let ball,ripple,paint;
+ const common={getWorld:()=>world,getViewport:()=>viewport,screenToWorld,unlock:()=>{unlocks++;}};
+ ball=installBoardBouncer({...common,objects:physical,controller:{data:()=>null,ballView:b=>({position:b,trail:[]})},createCapture:async request=>captures.push(request),onArm:()=>{ripple?.cancel();paint?.cancel();}});
+ ripple=installSimpleRippleBoard({...common,objects:ripples,controller:rippleController,now:()=>0,getCubes:()=>physical.list('cube'),seedCubes:()=>seedTriggerCubes({objects:physical,center:triggerCreationPoint({viewport,screenToWorld})}),onArm:()=>{ball.cancel();paint?.cancel();}});
+ paint=installSimpleDrawCreation({...common,commit:async()=>paintCommits++,onArm:()=>{ball.cancel();ripple.cancel();}});
+ viewport.setPointerCapture=()=>{};viewport.hasPointerCapture=()=>false;
+ const hint=()=>world.querySelector('.simple-interaction-hint');
+ const expectHint=label=>{check(world.querySelectorAll('.simple-interaction-hint').length===1,'exactly one hint');check(hint().querySelector('span').textContent===label,label+' visible');check(getComputedStyle(hint()).pointerEvents==='none','hint pointer transparent');};
+ const send=(type,x,y)=>{const r=viewport.getBoundingClientRect();viewport.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:21,button:0,buttons:type==='pointerup'?0:1,clientX:r.left+x*zoom,clientY:r.top+y*zoom}));};
+ // Selecting tools changes only their hint plus the established independent starters.
+ paint.arm();expectHint('DRAW');ball.arm({mode:'ball'});expectHint('SWIPE');check(physical.list('cube').length===3,'Ball seeds starters before teaching');
+ ripple.arm();expectHint('TAP');check(physical.list('cube').length===3,'Ripple reuses existing starters');paint.arm();expectHint('DRAW');
+ check(!ripples.list().length&&!physical.list('ball').length&&!captures.length&&!events.length&&!paintCommits&&!unlocks,'switching hints creates no notes, trigger, launch or unlock');
+ ripple.arm();expectHint('TAP');const seeded=JSON.stringify(physical.authoredSnapshot()),rippleSaved=JSON.stringify(ripples.snapshot());
+ const svg=hint().querySelector('svg'),ring=hint().querySelector('.interaction-hint-wave');await frame();svg.pauseAnimations();svg.setCurrentTime(1.5);await frame();const small=ring.r.animVal.value;svg.setCurrentTime(3.5);await frame();check(ring.r.animVal.value>small,`TAP expands a circular wave small=${small} large=${ring.r.animVal.value} time=${svg.getCurrentTime()} reduced=${matchMedia('(prefers-reduced-motion: reduce)').matches}`);
+ rippleController.tick();check(events.length===0&&captures.length===0,'TAP demo never schedules events');check(JSON.stringify(physical.authoredSnapshot())===seeded&&JSON.stringify(ripples.snapshot())===rippleSaved,'TAP demo never changes authored snapshots');
+ check(document.elementFromPoint(100,100)!==hint(),'hint cannot intercept input');
+ send('pointerdown',150,240);check(!hint(),'TAP disappears on pointerdown');check(ripples.list().length===0,'Ripple still waits for real tap release');send('pointerup',150,240);await frame();
+ check(ripples.list().length===1,'real tap creates one Ripple');transport.currentTick=192;rippleController.tick();check(rippleController.visibleWaves()[0].radius===360,'real Ripple expands on transport phase');transport.currentTick=384;rippleController.tick();check(rippleController.visibleWaves()[0].radius===0,'real Ripple looping unchanged');
+ const card=world.querySelector('.simple-ripple-trigger');card.click();check(!hint(),'opening existing Ripple controls shows no hint');
+ ripple.arm();expectHint('TAP');card.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:77,button:0}));check(!hint()&&ripples.list().length===1,'manipulating existing Ripple dismisses teaching without placement');ripple.cancel();
+ ball.arm({mode:'ball'});expectHint('SWIPE');const cannonCount=captures.length,ballCount=physical.list('ball').length,swipeSvg=hint().querySelector('svg');
+ const demoLine=hint().querySelector('.interaction-hint-trajectory');check(demoLine.classList.contains('physical-path-prediction'),'SWIPE shares real prediction class');
+ check(hint().querySelector('.physical-launch-preview')&&hint().querySelector('.interaction-hint-origin'),'SWIPE demonstrates drag origin and aim');
+ await frame();swipeSvg.pauseAnimations();swipeSvg.setCurrentTime(1.5);await frame();const start=hint().querySelector('.interaction-hint-ball').getCTM();swipeSvg.setCurrentTime(4);await frame();const end=hint().querySelector('.interaction-hint-ball').getCTM();check(Math.hypot(start.e-end.e,start.f-end.f)>40,'SWIPE demonstrates release and ball travel');
+ check(captures.length===cannonCount&&physical.list('ball').length===ballCount,'SWIPE creates no actual ball or capture');
+ send('pointerdown',250,500);check(!hint(),'SWIPE disappears on pointerdown');send('pointermove',450,430);const realPreview=world.querySelector('.physical-creation-prediction');check(!!realPreview.getAttribute('points'),'real pointer-controlled trajectory replaces demo');
+ check(captures.length===cannonCount&&physical.list('ball').length===ballCount,'real drag does not launch before release');send('pointerup',450,430);await frame();check(captures.length===cannonCount+1&&physical.list('ball').length===ballCount+1,'release creates one real ball/capture');check(!realPreview.getAttribute('points'),'release clears temporary real preview');
+ // No teaching for editing an existing Cannon/Ball.
+ ball.cancel();ball.arm({containerId:'existing',seed:false});check(!hint(),'existing Cannon aim has no creation hint');ball.cancel();
+ for(const z of [.4,1,1.8])for(const width of [280,1200]){zoom=z;viewport.style.width=width+'px';world.style.transform=`scale(${zoom})`;
+  for(const demo of ['tap','swipe']){const h=createBoardInteractionHint({...common,label:demo.toUpperCase(),demo}),r=h.layer.getBoundingClientRect(),v=viewport.getBoundingClientRect();check(r.left>=v.left-.1&&r.right<=v.right+.1&&r.top>=v.top-.1&&r.bottom<=v.bottom+.1,'hint fits zoom/narrow viewport');
+   check(!h.layer.querySelector('canvas'),'SVG teaching has no DPR backing-store dependency');h.dispose();}
+ }
+ zoom=1;world.style.transform='';viewport.style.width='1200px';
+ const originalDpr=Object.getOwnPropertyDescriptor(window,'devicePixelRatio');const vector=createBoardInteractionHint({...common,label:'TAP',demo:'tap'}),vectorRect=vector.layer.getBoundingClientRect();
+ for(const dpr of [1,2,3]){Object.defineProperty(window,'devicePixelRatio',{configurable:true,value:dpr});const r=vector.layer.getBoundingClientRect();check(r.x===vectorRect.x&&r.y===vectorRect.y&&r.width===vectorRect.width,'DPR does not change hint position or logical size');}
+ if(originalDpr)Object.defineProperty(window,'devicePixelRatio',originalDpr);else delete window.devicePixelRatio;vector.dispose();
+ for(const demo of ['draw','tap','swipe']){const query=new EventTarget();query.matches=true;const h=createSimpleInteractionHint(world,{label:demo.toUpperCase(),demo,motionQuery:query});h.show({box:{x:40,y:40,width:600}});await frame();
+  check(h.layer.querySelector('svg').animationsPaused(),'reduced motion pauses '+demo);check(getComputedStyle(h.layer.querySelector('span')).animationName==='none','reduced motion keeps static label');
+  if(demo==='tap')check(h.layer.querySelector('.interaction-hint-wave').r.animVal.value>0,'reduced TAP has visible static rings');
+  if(demo==='swipe')check(getComputedStyle(h.layer.querySelector('.interaction-hint-trajectory')).animationName==='none','reduced SWIPE has static trajectory');h.dispose();
+ }
+ const saved=JSON.stringify({cubes:physical.authoredSnapshot(),ripples:ripples.snapshot()});paint.arm();ball.arm({mode:'ball',seed:false});ripple.arm();paint.arm();expectHint('DRAW');paint.cancel();
+ check(!hint(),'cancel removes all hint layers');check(JSON.stringify({cubes:physical.authoredSnapshot(),ripples:ripples.snapshot()})===saved,'tool teaching never enters saved state');
+ ripple.dispose();ball.dispose();rippleController.destroy();
+ for(const [label,demo]of [['DRAW','draw'],['TAP','tap'],['SWIPE','swipe']]){const button=document.createElement('button');button.textContent='Preview '+label;button.onclick=()=>createBoardInteractionHint({...common,label,demo});document.body.append(button);}
+ document.querySelector('#results').textContent=`PASS ${count} assertions — DRAW/TAP/SWIPE switching, animation, pointer handoff, isolation, looping, zoom, reduced motion`;
+}catch(e){document.querySelector('#results').textContent='FAIL '+e.stack;}
+</script>

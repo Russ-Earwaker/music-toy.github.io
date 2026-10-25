@@ -1,5 +1,6 @@
 import {quantizeForwardTick,ripplerEventsInWindow} from './ripplesynth-transport.js';
 import {resolvePlayableActivation} from './board-object.js';
+import {ensureTransportPlayingForSimpleAuthoring} from './simple-authoring-playback.js';
 
 // Canonical DrawGrid authored notes are the only pattern authority. The shared
 // application scheduler services this controller; presentation only reads phase.
@@ -32,23 +33,28 @@ export function createDrumLoopController({objects,getTransport,schedule,cancel=(
   const event={...direct,activationSource,eventTick,when:t.tickToAudioTime(eventTick),transportId:t.id};admitted.set(key,event);feedback.set(key,event);
   const voiceKey=soundKey(event);if(!event.muted&&event.volume>0&&!sounds.has(voiceKey)){sounds.set(voiceKey,event);schedule(event);}return event;
  }
- function activateDrum({id,eventTick,transport:t,activationSource}){
-  if(!['manual','trigger','loopPlayback'].includes(activationSource))throw new TypeError('Unknown Drum activation source');
+ function recordManualHit(id,eventTick){
   const o=objects.get(id);if(!o)return null;
   const slot=(eventTick%(o.authoredState.periodLoops*384))/48;
-  if(activationSource==='manual'&&!o.authoredState.pattern.authoredNotes.some(n=>n.col===slot)){
+  if(!o.authoredState.pattern.authoredNotes.some(n=>n.col===slot)){
    recording=true;try{objects.update(id,{pattern:{authoredNotes:[...o.authoredState.pattern.authoredNotes,{col:slot,sourceMidi:60}]}});}finally{recording=false;}
   }
+ }
+ function activateDrum({id,eventTick,transport:t,activationSource}){
+  if(!['manual','trigger','loopPlayback'].includes(activationSource))throw new TypeError('Unknown Drum activation source');
+  if(!objects.get(id))return null;
+  if(activationSource==='manual')recordManualHit(id,eventTick);
   return admit(id,eventTick,t,activationSource);
  }
  async function activate(id){
   const t=getTransport(id);if(!t||!objects.get(id))return null;
-  if(t.state!=='playing')await t.play();
-  return activateDrum({id,eventTick:quantizeForwardTick(t.currentTick),transport:t,activationSource:'manual'});
+  const eventTick=quantizeForwardTick(t.currentTick);recordManualHit(id,eventTick);
+  const start=ensureTransportPlayingForSimpleAuthoring(t);if(start)await start;
+  return activateDrum({id,eventTick,transport:t,activationSource:'manual'});
  }
  async function trigger(event){
+  // External hits retain one-shot admission without starting the Drum's loop.
   const t=getTransport(event.receiverId);if(!t)return null;
-  if(t.state!=='playing')await t.play();
   const tick=t.audioTimeToTick(event.when);
   return activateDrum({id:event.receiverId,eventTick:quantizeForwardTick(tick,0,2,{strict:false}),transport:t,activationSource:'trigger'});
  }

@@ -1,5 +1,6 @@
 import { LETTER_PHYS, LETTER_VIS, DRAW_LABEL_OPACITY_BASE } from './dg-tuning.js';
 import { DG_GHOST_DEBUG } from './dg-debug.js';
+import { DRAW_LABEL_STYLE } from '../draw-label-style.js';
 
 function clamp01(value) {
   if (typeof value !== 'number') return 0;
@@ -28,16 +29,8 @@ export function createDrawLabelOverlay(panel, getState, opts = {}) {
       justifyContent: 'center',
       pointerEvents: 'none',
       zIndex: 7,
-      fontFamily: 'system-ui, sans-serif',
-      fontWeight: '700',
-      letterSpacing: '0.08em',
-      // Use Loopgrid/TAP-ish theming if available; bump ~50%.
-      color: 'var(--tap-label-color, rgba(160,188,255,0.72))',
-      textShadow: 'var(--tap-label-shadow, 0 2px 10px rgba(40,60,120,0.55))',
+      ...DRAW_LABEL_STYLE,
       fontSize: 'initial',
-      lineHeight: '1',
-      textTransform: 'uppercase',
-      userSelect: 'none',
       opacity: `${DRAW_LABEL_OPACITY_BASE}`,
     });
     root.appendChild(drawLabel);

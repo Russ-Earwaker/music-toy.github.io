@@ -10,8 +10,8 @@ document.querySelector('#run').onclick=async()=>{
  const passed=[];let surface;
  const check=(value,message)=>{if(!value)throw new Error(message);passed.push(message);};
  try{
-  let lines=[{id:'line',source:createLineSource([{x:.1,y:.8},{x:.8,y:.2}]),straightened:false}],adds=0,moves=0,clears=0;
-  const api={lines:()=>lines,unlock(){},onNote:()=>()=>{},setSilence(){},setStraightened(id,value){lines[0].straightened=value;},clear(){clears++;lines=[];},addLine(source){adds++;lines=[{id:'line',source}];return {started:Promise.resolve()};},beginContentMove(){moves++;},moveAuthoredContent(){moves++;}};
+  let lines=[{id:'line',source:createLineSource([{x:.1,y:.8},{x:.8,y:.2}]),straightened:false}],adds=0,moves=0,clears=0,arms=0;
+  const api={armDraw(){arms++;},lines:()=>lines,unlock(){},onNote:()=>()=>{},setSilence(){},setStraightened(id,value){lines[0].straightened=value;},clear(){clears++;lines=[];},addLine(source){adds++;lines=[{id:'line',source}];return {started:Promise.resolve()};},beginContentMove(){moves++;},moveAuthoredContent(){moves++;}};
   let paint=[];surface=installSimpleDrawSurface(host,api,{get:()=>paint,set:v=>paint=v});surface.setActive(true);
   const scene=host.querySelector('section'),canvas=scene.querySelector('canvas');
   // Synthetic pointers exercise installed handlers; capture needs a native active
@@ -23,14 +23,14 @@ document.querySelector('#run').onclick=async()=>{
   check(scene.querySelector('[data-tool="Draw"]').hidden,'Draw affordance hidden for completed line');
   const before=JSON.stringify(lines);stroke();check(adds===0&&moves===0&&JSON.stringify(lines)===before,'Completed canvas stroke cannot move, clear or replace content');
   scene.querySelector('[data-tool="Scissors"]').click();
-  check(!scene.querySelector('[aria-label="Straighten"]')&&!scene.querySelector('[data-reset]'),'Scissors shows only contextual actions');
+  check(scene.querySelector('[data-tool="Draw"]').hidden,'Scissors preserves one-line contextual controls');
   check(scene.querySelector('.free-play-random').title==='Random Cuts','Random action is cuts only');
   scene.querySelector('[data-tool="Scissors"]').click();
   scene.querySelector('[data-reset]').click();
   check(clears===1&&!lines.length&&!scene.querySelector('[data-tool="Draw"]').hidden,'Clear restores empty drawable state');
-  stroke();await Promise.resolve();check(adds===1&&lines.length===1,'Empty toy accepts one valid stroke');
-  stroke();check(adds===1&&lines.length===1,'Subsequent pointer path cannot replace the new line');
-  surface.setActive(false);surface.setActive(true);check(scene.querySelector('[data-tool="Draw"]').hidden,'Reopen retains one-line restriction');
+  scene.querySelector('[data-tool="Draw"]').click();check(arms===1,'Empty Draw arms free-board creation');
+  stroke();check(adds===0&&!lines.length,'Old canvas cannot accept replacement strokes');
+  surface.setActive(false);surface.setActive(true);check(scene.querySelector('[data-tool="Scissors"]').hidden,'Reopen empty state hides scissors');
   for(const scale of [.35,.625,1,1.8]){
    const viewport=document.createElement('div');viewport.className='board-viewport';viewport.style.setProperty('--bv-scale',scale);host.append(viewport);
    const panel=createBaseArtToyPanel({kind:'flashCircle',left:120,top:240});ensureBaseArtToyUI(panel);viewport.append(panel);setBaseArtToyControlsVisible(panel,true);

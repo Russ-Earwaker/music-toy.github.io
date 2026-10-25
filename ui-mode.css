@@ -53,3 +53,7 @@ html[data-ui-mode="simple"] .toy-spawner-menu { width:min(280px,calc(100vw - var
 /* Simple keeps connectivity readable while the instruments take visual priority. */
 html[data-ui-mode="simple"] .connection-layer .connection-path { opacity:.25; }
 html[data-ui-mode="simple"] .connection-layer [data-active="1"] .connection-path { opacity:.8; }
+
+.simple-creation-group[data-simple-category='play'] .simple-creation-items { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+
+.simple-creation-group[data-simple-category='trigger'] .simple-creation-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));row-gap:26px}
