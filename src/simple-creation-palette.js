@@ -1,3 +1,4 @@
+import {canCreateToy} from './runtime-config.js';
 // A curated view over creation entries, not another set of creation modes.
 export const SIMPLE_CREATION_CATEGORIES=Object.freeze([
  {id:'place',label:'PLACE'},
@@ -6,5 +7,5 @@ export const SIMPLE_CREATION_CATEGORIES=Object.freeze([
  {id:'play',label:'PLAY'},
 ]);
 export function simpleCreationGroups(entries){
- return SIMPLE_CREATION_CATEGORIES.map(category=>({...category,entries:entries.filter(entry=>entry.simpleCategory===category.id).sort((a,b)=>(a.simpleOrder||0)-(b.simpleOrder||0))}));
+ return SIMPLE_CREATION_CATEGORIES.map(category=>({...category,entries:entries.filter(entry=>entry.simpleCategory===category.id && canCreateToy(entry.type)).sort((a,b)=>(a.simpleOrder||0)-(b.simpleOrder||0))}));
 }

@@ -1022,7 +1022,7 @@ export function applySceneSnapshot(snap){
           const top = parseFloat(ui.top);
           const width = parseFloat(ui.width);
           const height = parseFloat(ui.height);
-          const opts = {};
+          const opts = {restoring: true};
           if (Number.isFinite(left) && Number.isFinite(width)) opts.centerX = left + width / 2;
           if (Number.isFinite(top) && Number.isFinite(height)) opts.centerY = top + height / 2;
           opts.showControlsOnSpawn = false;
@@ -1103,7 +1103,7 @@ export function applySceneSnapshot(snap){
           const top = parseFloat(ui.top);
           const width = parseFloat(ui.width);
           const height = parseFloat(ui.height);
-          const opts = {};
+          const opts = {restoring: true};
           if (Number.isFinite(left) && Number.isFinite(width)) opts.centerX = left + width / 2;
           if (Number.isFinite(top) && Number.isFinite(height)) opts.centerY = top + height / 2;
           if (t.state && typeof t.state === 'object' && t.state.instrument) opts.instrument = t.state.instrument;
@@ -1216,7 +1216,7 @@ export function applySceneSnapshot(snap){
     for(const old of panels.filter(p=>p.dataset.masterToyId)){factory?.destroy?.(old,{allowOffBoard:true,sceneRestore:true});old.remove();}
     for(const t of (snap.toys||[]).filter(t=>t.masterToyId)){
       if(!document.getElementById(t.masterToyId))throw new Error('Missing Master: '+t.masterToyId);
-      const instance=factory.createInstance(t.masterToyId,{id:t.id,instanceNumber:t.instanceNumber,linkedCopyNumber:t.linkedCopyNumber,sharedDefinitionId:t.sharedDefinitionId,autoArrangeOwner:t.autoArrangeOwner,structureInstanceId:t.structureInstanceId,structureMasterChildId:t.structureMasterChildId,ui:t.ui,containerEl:t.ownerArtToyId?internalHost:undefined});
+      const instance=factory.createInstance(t.masterToyId,{restoring:true,id:t.id,instanceNumber:t.instanceNumber,linkedCopyNumber:t.linkedCopyNumber,sharedDefinitionId:t.sharedDefinitionId,autoArrangeOwner:t.autoArrangeOwner,structureInstanceId:t.structureInstanceId,structureMasterChildId:t.structureMasterChildId,ui:t.ui,containerEl:t.ownerArtToyId?internalHost:undefined});
       panels.push(instance);usedPanels.add(instance);
     }
     // --- Re-link chain edges AFTER all toys exist ---

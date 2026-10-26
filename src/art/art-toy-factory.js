@@ -1,3 +1,4 @@
+import {features} from '../runtime-config.js';
 import {CIRCULAR_BUTTON_HTML} from '../circular-control.js';
 import {expressiveControl} from '../expressive-toy-chrome.js';
 // src/art/art-toy-factory.js
@@ -8560,6 +8561,7 @@ export function getArtCatalog() {
 }
 
 export function createArtToyAt(artType, opts = {}) {
+  if (!features.systems.art && !opts.restoring) return null;
   const type = String(artType || '');
   if (!type) return null;
   const panel = makePanelBase(type, opts);

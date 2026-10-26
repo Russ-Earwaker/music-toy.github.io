@@ -1,14 +1,17 @@
 // A user preference, deliberately independent of project and transport models.
+import {features} from './runtime-config.js';
 export const UI_MODE_KEY = 'prefs:ui-mode';
-export function createUIMode({storage, apply = () => {}} = {}) {
+export function createUIMode({storage, apply = () => {}, config = features} = {}) {
   let mode = 'simple';
   try { if (storage?.getItem(UI_MODE_KEY) === 'advanced') mode = 'advanced'; } catch {}
+  if (config.interface.forcedMode) mode = config.interface.forcedMode;
   const listeners = new Set();
   return {
     get: () => mode,
     isSimple: () => mode === 'simple',
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     set(next) {
+      if (!config.interface[next] || config.interface.forcedMode) return;
       if (!['simple', 'advanced'].includes(next) || next === mode) return;
       const previous = mode;
       mode = next;

@@ -19,7 +19,7 @@ export function installSimpleDrawSurface(host,api,paintStore){
  const geometry=()=>api.getGeometry?.()||{x:0,y:0,width:canvas.clientWidth,height:canvas.clientHeight};
  const morphValue=()=>{if(!morph)return api.lines()[0]?.straightened?1:0;const t=Math.max(0,Math.min(1,(performance.now()-morph.at)/650)),e=t*t*(3-2*t);return morph.from+(morph.to-morph.from)*e;};
  const state=()=>simplePaintState(!!api.lines().length,!!api.isDrawing?.());
- const tools=installSilenceTools({scene,controlsRoot,canvas,api,morphValue,status,paintStore,sceneEvents:false,allowPaint:false,scissorsToggle:false,getGeometry:geometry,onToolChange:()=>controls()});
+ const tools=installSilenceTools({scene,controlsRoot,canvas,api,morphValue,status,paintStore,sceneEvents:false,allowPaint:false,scissorsToggle:false,getGeometry:geometry,onToolChange:tool=>{if(tool==='Scissors')api.stopDrawingEffects?.();controls();}});
  function controls(){
   const view=state(),line=api.lines()[0];lastState=view.state;scene.dataset.paintState=view.state;const card=host.closest('[data-presentation="simple-draw"]');if(card)card.dataset.paintState=view.state;
   if(view.scissors&&tools.tool!=='Scissors')tools.selectScissors();

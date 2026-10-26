@@ -1,0 +1,38 @@
+<!doctype html><meta charset="utf-8"><title>Simple Paint flow field QA</title>
+<style>body{margin:0;background:#0b111b;color:#e9f0ff;font:14px system-ui}header{padding:18px;position:relative;z-index:30;background:#141e2e}button,select{font:inherit;padding:8px 12px;margin:3px;background:#263650;border:1px solid #647896;border-radius:6px;color:inherit}svg{position:fixed;inset:100px 0 0;width:100%;height:600px;pointer-events:none}path{stroke:#536475;stroke-width:2;fill:none}#status{display:inline-block;margin:12px}p{margin:10px 20px;color:#9babc2}</style>
+<header><strong>Production Simple Paint particle renderer</strong><br>
+<button data-case="slow">Slow straight</button><button data-case="fast">Fast straight</button><button data-case="pause">Pause</button><button data-case="turn">Sharp turn</button><button data-case="loop">Loop</button><button id="advance">Advance 0.5s</button><button id="freeze">Freeze / resume</button><button id="release">Release</button><button id="reset">Clear</button>
+<select id="instrument" aria-label="Instrument"><option>PIANO</option><option>BELL</option><option>KALIMBA</option></select><button id="compare">Compare DrawGrid</button><span id="status">Idle</span></header>
+<p>Deterministic visual QA uses the production renderer and its clock/coordinate injection. Select a gesture, then freeze to inspect circular encounters and coasting particles. Clear stops all work.</p><svg><path id="trail"/></svg>
+<script type="module">
+import {installPaintGestureParticles} from '../src/simple-paint-particles.js';
+import {DRAWGRID_POINTER_SCREEN_RADIUS} from '../src/drawgrid/drawgrid-pointer-radius.js';
+import {createGenericParticleField} from '../src/baseMusicToy/particles/field-generic.js';
+let clock=0,callbacks=new Map(),serial=0,scenario=null,frozen=false,last=0,start=0,frames=0,total=0,history=[],animationFrame=null,comparison=false,reference=null;
+const fakeWindow={performance:{now:()=>clock},get devicePixelRatio(){return window.devicePixelRatio},matchMedia:q=>window.matchMedia(q),requestAnimationFrame:fn=>{callbacks.set(++serial,fn);return serial;},cancelAnimationFrame:id=>callbacks.delete(id)};
+const effect=installPaintGestureParticles({worldToScreen:p=>p,getInstrument:()=>document.querySelector('#instrument').value,window:fakeWindow});
+const referenceCanvas=document.createElement('canvas');referenceCanvas.width=referenceCanvas.height=400;Object.assign(referenceCanvas.style,{position:'fixed',left:'52%',top:'250px',width:'400px',height:'400px',pointerEvents:'none',border:'1px solid #33435a',display:'none'});document.body.append(referenceCanvas);
+const referenceLabel=document.createElement('p');referenceLabel.textContent='DrawGrid normal radius (48.6 CSS px) + production radial poke';Object.assign(referenceLabel.style,{position:'fixed',left:'52%',top:'205px',display:'none'});document.body.append(referenceLabel);
+function resetReference(){reference?.destroy();reference=createGenericParticleField({bounds:{left:0,top:0,width:400,height:400}},{cap:320,returnSeconds:2.4,forceMul:2.5,vmaxMul:6,noise:0,kick:.25,kickDecay:800,drawMode:'dots',sizePx:1.4});reference.forceSeed();}
+function drawReference(p,elapsed,drawing){if(!comparison)return;const center=innerWidth*.25,x=p.x-center+200,y=p.y-250;if(drawing)reference.poke(x,y,{radius:DRAWGRID_POINTER_SCREEN_RADIUS,strength:6000*elapsed/1000/2.5,highlight:false});reference.step(elapsed/1000);const ctx=referenceCanvas.getContext('2d');ctx.clearRect(0,0,400,400);reference.render(ctx);ctx.globalAlpha=.18;ctx.strokeStyle='#a1b8ff';ctx.beginPath();ctx.arc(x,y,DRAWGRID_POINTER_SCREEN_RADIUS,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);ctx.stroke();}
+const status=document.querySelector('#status'),trail=document.querySelector('#trail');
+function point(t){const center=innerWidth*(comparison?.25:.5),f=comparison?.5:1;
+ if(scenario==='slow')return {x:center-190*f+(t*.06)%(380*f),y:390};
+ if(scenario==='fast')return {x:center-260*f+(t*.5)%(520*f),y:390};
+ if(scenario==='pause')return {x:center-180*f+Math.min(t*.24,360*f),y:390};
+ if(scenario==='turn'){const a=(t*.25)%(700*f);return a<350*f?{x:center-200*f+a,y:340}:{x:center+150*f,y:340+a-350*f};}
+ return {x:center+Math.cos(t*.0018)*130*f,y:420+Math.sin(t*.0018)*100*f};
+}
+function advance(elapsed){clock+=elapsed;const p=point(clock-start);if(effect.getProof().drawing){if(scenario!=='pause'||clock-start<1500)effect.move(p);history.push(p);if(history.length>120)history.shift();trail.setAttribute('d',history.map((v,i)=>(i?'L':'M')+v.x+','+(v.y-100)).join(' '));}
+ drawReference(p,elapsed,effect.getProof().drawing);
+ const tasks=[...callbacks.values()];callbacks.clear();const before=performance.now();for(const fn of tasks)fn(clock);total+=performance.now()-before;frames++;
+ const s=effect.getProof();status.textContent=scenario+' | '+s.particles.length+' particles / '+s.particles.filter(p=>p.pushEnergy>.1).length+' hot | '+(s.speed||0).toFixed(0)+' px/s | '+(total/frames).toFixed(2)+' ms/frame';
+}
+function animate(now){if(!scenario)return;const elapsed=Math.min(33,now-(last||now));last=now;if(!frozen)advance(elapsed);animationFrame=requestAnimationFrame(animate);}
+for(const button of document.querySelectorAll('[data-case]'))button.onclick=()=>{const running=!!scenario;scenario=button.dataset.case;frozen=false;clock=start=0;last=0;frames=total=0;history=[];if(comparison)resetReference();effect.begin(point(0));if(!running)requestAnimationFrame(animate);};
+document.querySelector('#advance').onclick=()=>{if(!scenario)return;frozen=true;for(let i=0;i<30;i++)advance(1000/60);};
+document.querySelector('#compare').onclick=()=>{comparison=!comparison;referenceCanvas.style.display=referenceLabel.style.display=comparison?'block':'none';if(comparison)resetReference();if(scenario){clock=start=0;history=[];effect.begin(point(0));}};
+document.querySelector('#freeze').onclick=()=>frozen=!frozen;
+document.querySelector('#release').onclick=()=>{frozen=false;effect.release();};
+document.querySelector('#reset').onclick=()=>{scenario=null;cancelAnimationFrame(animationFrame);effect.stop();trail.setAttribute('d','');referenceCanvas.getContext('2d').clearRect(0,0,400,400);status.textContent='Idle';};
+</script>

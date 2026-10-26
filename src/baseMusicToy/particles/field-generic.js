@@ -5,7 +5,7 @@
 // - the host owns canvas CSS size, backing resolution, DPR and visibility;
 // - render(ctx) expects the host to have installed the logical-to-display transform.
 
-import { createParticleRuntime, integrateParticleVelocity, renderParticles2D } from './particle-runtime.js';
+import { createParticleRuntime, integrateParticleVelocity, renderParticles2D, particleHighlightAppearance, radialParticleForce } from './particle-runtime.js';
 import {
   BASE_AREA,
   BASE_COUNT,
@@ -256,8 +256,9 @@ export function createGenericParticleField({ bounds, qualityPolicy = null } = {}
         if (candidate > highlight) { highlight = candidate; progress = 1 - life; }
       }
       const alpha = config.minAlpha + (config.maxAlpha - config.minAlpha) * (0.5 + 0.5 * Math.sin(particle.a * Math.PI * 2));
-      const radius = Math.max(0.5, particle.r ?? config.size) * (1 + highlight * 0.25);
-      target.globalAlpha = Math.min(1, alpha + highlight * 0.6) * particle.fade;
+      const appearance = particleHighlightAppearance(alpha, highlight, particle.fade);
+      const radius = Math.max(0.5, particle.r ?? config.size) * appearance.radiusScale;
+      target.globalAlpha = appearance.alpha;
       if (highlight > 0) {
         const color = gradientColor(progress);
         target.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
@@ -288,6 +289,7 @@ export function createGenericParticleField({ bounds, qualityPolicy = null } = {}
     const strength = Number.isFinite(opts.strength) ? opts.strength : 28;
     const plow = opts.mode === 'plow';
     addHighlight(x, y, opts);
+    const radial = {};
     for (const particle of runtime.particles) {
       const dx = particle.x - x;
       const dy = particle.y - y;
@@ -300,10 +302,9 @@ export function createGenericParticleField({ bounds, qualityPolicy = null } = {}
         particle.x = x + nx * rim;
         particle.y = y + ny * rim;
       }
-      const falloff = Math.pow(1 - Math.min(1, distance / radius), 3);
-      const force = strength * (plow ? 0.35 : 1) * falloff * config.forceMul;
-      particle.vx += nx * force;
-      particle.vy += ny * force;
+      radialParticleForce(dx, dy, radius, strength * (plow ? 0.35 : 1) * config.forceMul, radial);
+      particle.vx += radial.x;
+      particle.vy += radial.y;
     }
   }
 

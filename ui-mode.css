@@ -57,3 +57,6 @@ html[data-ui-mode="simple"] .connection-layer [data-active="1"] .connection-path
 .simple-creation-group[data-simple-category='play'] .simple-creation-items { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
 
 .simple-creation-group[data-simple-category='trigger'] .simple-creation-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));row-gap:26px}
+
+.ui-mode-chrome[hidden] { display:none!important; }
+html:has(.ui-mode-chrome[hidden]) { --ui-mode-row-space:0px; }

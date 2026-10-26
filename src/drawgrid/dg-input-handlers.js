@@ -1,3 +1,4 @@
+import {drawGridPointerRadius} from './drawgrid-pointer-radius.js';
 import {moveAuthoredNote} from './dg-authored-notes.js';
 // src/drawgrid/dg-input-handlers.js
 // DrawGrid pointer input handlers.
@@ -122,7 +123,7 @@ export function createDgInputHandlers({ state, deps } = {}) {
       const baseRadius = s.DG_KNOCK.ghostTrail.radiusToy(area);
       const lw = (typeof d.R.getLineWidth === 'function') ? d.R.getLineWidth() : 12;
       s.FF.pokeAlongStrokeBand(x0, y0, x0, y0, lw, s.DG_KNOCK.ghostTrail);
-      const pushRadius = baseRadius * 1.5;
+      const pushRadius = drawGridPointerRadius(baseRadius);
       s.FF.pokeFieldToy('pointerDown', x0, y0, pushRadius, s.DG_KNOCK.ghostTrail.strength, { mode: 'plow' });
     } catch {}
     s.cur = {
@@ -354,7 +355,7 @@ export function createDgInputHandlers({ state, deps } = {}) {
             ? s.DG_KNOCK.ghostTrail.radiusToy(area)
             : 0;
           if (!Number.isFinite(baseRadius) || baseRadius <= 0) baseRadius = 18;
-          const pointerR = baseRadius * 1.5;
+          const pointerR = drawGridPointerRadius(baseRadius);
           const logicalW = (Number.isFinite(s.gridAreaLogical?.w) && s.gridAreaLogical.w > 0)
             ? s.gridAreaLogical.w
             : (area?.w || s.cssW || 0);
@@ -366,7 +367,7 @@ export function createDgInputHandlers({ state, deps } = {}) {
             Number.isFinite(logicalH) && logicalH > 0 ? logicalH : 0,
           );
           const capR = Math.max(8, logicalMin > 0 ? logicalMin * 0.25 : pointerR * 1.25);
-          const disturbanceRadius = Math.min(pointerR, capR);
+          const disturbanceRadius = drawGridPointerRadius(baseRadius, capR);
           s.FF.pokeFieldToy('ghostTrail', lastPt.x, lastPt.y, disturbanceRadius, s.DG_KNOCK.ghostTrail.strength, {
             mode: 'plow',
             highlightMs: 900,

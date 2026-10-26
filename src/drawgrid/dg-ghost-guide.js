@@ -1,3 +1,4 @@
+import {drawGridPointerRadius} from './drawgrid-pointer-radius.js';
 // src/drawgrid/dg-ghost-guide.js
 // Ghost guide behavior and auto-sweep controller.
 
@@ -399,13 +400,13 @@ export function createDgGhostGuide({
 
       // Disturbance radius in toy space (unchanged: big, soft "snowplow" feel).
       const baseR = DG_KNOCK?.ghostTrail?.radiusToy?.(readGridArea());
-      const pointerR = baseR * 1.5;
+      const pointerR = drawGridPointerRadius(baseR);
       const logicalMin = Math.min(
         (readGridAreaLogical()?.w ?? 0),
         (readGridAreaLogical()?.h ?? 0)
       );
       const capR = Math.max(8, Math.min(readGridAreaLogical()?.w ?? 0, readGridAreaLogical()?.h ?? 0) * 0.25);
-      const disturbanceRadius = Math.min(pointerR, capR);
+      const disturbanceRadius = drawGridPointerRadius(baseR, capR);
 
       // Visual radius: match the user's drawn line thickness (thickness ≈ lineWidth).
       let visualRadius = disturbanceRadius;

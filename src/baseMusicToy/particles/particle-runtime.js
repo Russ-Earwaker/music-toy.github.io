@@ -19,6 +19,22 @@ export function applyParticleDamping(particle, dampingPerFrame, dt, referenceDt 
   return particle;
 }
 
+// DrawGrid's normal poke: radial direction and a cubic distance falloff.
+// Strength is an impulse for poke callers, or acceleration for dt-based callers.
+export function radialParticleForce(dx, dy, radius, strength, out = {}) {
+  const distance = Math.hypot(dx, dy);
+  const falloff = Math.pow(1 - Math.min(1, distance / radius), 3);
+  const magnitude = strength * falloff / (distance || 1);
+  out.x = dx * magnitude;
+  out.y = dy * magnitude;
+  return out;
+}
+
+// DrawGrid's highlight response, shared by velocity-lit local fields.
+export function particleHighlightAppearance(baseAlpha, highlight, fade = 1) {
+  return {alpha: Math.min(1, baseAlpha + highlight * 0.6) * fade, radiusScale: 1 + highlight * 0.25};
+}
+
 export function bounceParticleInBounds(particle, bounds, { restitution = 0.8, onBounce } = {}) {
   let bounced = false;
   if (particle.x < bounds.left) { particle.x = bounds.left; particle.vx = Math.abs(particle.vx) * restitution; bounced = true; }

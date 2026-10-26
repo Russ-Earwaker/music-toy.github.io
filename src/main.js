@@ -101,6 +101,7 @@ import {createSimpleBouncerController} from './simple-bouncer.js';
 import {installSimpleBouncerSurface} from './simple-bouncer-surface.js';
 import {boardPhysicalObjects} from './board-physical-objects.js';
 import {installBoardBouncer} from './board-bouncer.js';
+import {canCreateToy, canCreateBackingToy} from './runtime-config.js';
 import {uiMode} from './ui-mode.js';
 import {installSimpleDrawSurface} from './simple-draw-surface.js';
 import {installSimpleDrawCreation} from './simple-draw-creation.js';
@@ -2211,7 +2212,7 @@ function setExperimentalEnabled(enabled) {
 
 function getToyCatalog() {
     const experimentalOn = isExperimentalEnabled();
-    return toyCatalog.filter(entry=>!['simple-draw','simple-bouncer','simple-ripple','simple-drum','simple-drum-set','simple-string','simple-strum','physical-cube','physical-ball','physical-gravity-ball'].includes(entry.type)||!g_artInternal.active)
+    return toyCatalog.filter(entry=>canCreateToy(entry.type)).filter(entry=>!['simple-draw','simple-bouncer','simple-ripple','simple-drum','simple-drum-set','simple-string','simple-strum','physical-cube','physical-ball','physical-gravity-ball'].includes(entry.type)||!g_artInternal.active)
     .filter(entry=>!entry.type.startsWith('physical-')||uiMode.isSimple()||window.BouncerBoard?.isRelevant?.()).map((entry) => {
         if (EXPERIMENTAL_TOYS.includes(entry.type)) {
             return { ...entry, disabled: entry.disabled && !experimentalOn };
@@ -5963,8 +5964,12 @@ function syncOverviewPosition(panel) {
     } catch {}
 }
 
+// Private token: public factory options cannot opt into internal backing creation.
+const SIMPLE_TOY_BACKING = Symbol('simple-toy-backing');
 function createToyPanelAt(toyType, {
     id = null,
+    restoring = false,
+    creationContext = null,
     centerX,
     centerY,
     instrument, soundState,
@@ -5978,6 +5983,7 @@ function createToyPanelAt(toyType, {
     artOwnerId = null,
 } = {}) {
     const type = String(toyType || '').toLowerCase();
+    if (!restoring && !canCreateToy(type) && !(creationContext === SIMPLE_TOY_BACKING && canCreateBackingToy(type, 'simple-draw'))) return null;
     if(type==='simple-string'||type==='simple-strum'){if(artOwnerId||g_artInternal.active)return null;g_stringBoard.arm(type==='simple-string'?'string':'strum');return null;}
     if(type==='simple-drum'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.arm();return null;}
     if(type==='simple-drum-set'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.createSet();return null;}
@@ -6386,7 +6392,8 @@ const g_toyInstances=createLinkedToyViewController({
  syncVolumeUI,
  createView:(source,options)=>{
    if(containerToyModel.owner(source.id))throw new Error('Expand the container before creating a linked copy of its internal toys.');
-   const p=createToyPanelAt(source.dataset.toy,{id:options.id,instrument:source.dataset.instrument,autoCenter:false,allowOffscreen:true,skipSpawnPlacement:true,containerEl:options.containerEl||source.parentElement,artOwnerId:source.dataset.artOwnerId||null});
+   const p=createToyPanelAt(source.dataset.toy,{id:options.id,restoring:options.restoring,instrument:source.dataset.instrument,autoCenter:false,allowOffscreen:true,skipSpawnPlacement:true,containerEl:options.containerEl||source.parentElement,artOwnerId:source.dataset.artOwnerId||null});
+   if (!p) throw new Error('Toy creation is unavailable in this runtime configuration.');
    p.style.left=options.ui?.left||`${(parseFloat(source.style.left)||0)+source.offsetWidth+120}px`;p.style.top=options.ui?.top||source.style.top||'0px';
    p.dataset.toyName=source.dataset.toyName;return p;
  },
@@ -7174,7 +7181,7 @@ const g_simpleToyMusic={
  containers:containerToyModel,model:connectionModel,getToy:id=>document.getElementById(id),
  createGrid:async(state,position)=>{
   let panel;const previous=g_layoutRestoring;g_layoutRestoring=true;
-  try{panel=createToyPanelAt('drawgrid',{centerX:position.x+400,centerY:position.y+380,autoCenter:false,allowOffscreen:true,skipSpawnPlacement:true,instrument:state.instrument});
+  try{panel=createToyPanelAt('drawgrid',{creationContext:SIMPLE_TOY_BACKING,centerX:position.x+400,centerY:position.y+380,autoCenter:false,allowOffscreen:true,skipSpawnPlacement:true,instrument:state.instrument});
    if(!panel)throw new Error('Could not create DrawGrid');panel.classList.add('container-pending');ensureToyPanelInitializedNow(panel,'simple-draw');
    const parent=connectionModel.getParent(panel.id);if(parent)connectionModel.disconnect(parent.id);
    panel.style.left=position.x+'px';panel.style.top=position.y+'px';panel.dataset.positionSource='manual';
@@ -7301,8 +7308,9 @@ g_containerPresentations.register('simple-draw',{
   if(!surface){const api={lines:()=>{const line=g_simpleDraw.line(c.id);return line?[line]:[];},
    unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
    armDraw:()=>{g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.arm({containerId:c.id,delay:250});},
+   stopDrawingEffects:()=>g_simpleDrawCreation.stopParticles(),
    isDrawing:()=>g_simpleDraw.isPending(c.id)||(g_simpleDrawCreation.active&&g_simpleDrawCreation.targetId===c.id),
-   clear:()=>{if(g_simpleDrawCreation.targetId===c.id)g_simpleDrawCreation.cancel();return g_simpleDraw.clear(c.id);},
+   clear:()=>{g_simpleDrawCreation.stopParticles();if(g_simpleDrawCreation.targetId===c.id)g_simpleDrawCreation.cancel();return g_simpleDraw.clear(c.id);},
    setSilence:g_simpleDraw.setSilence,setStraightened:(id,value)=>{const s=ensureSimpleDrawSpace(id);g_simpleDraw.setStraightened(id,value);const current=containerToyModel.get(id);if(s){moveSimpleDrawContent(id,{...s,x:current.bounds.x+s.x,y:current.bounds.y+s.y},0,0);containerToyModel.commitContainerBounds(id);}},onNote:listener=>g_simpleDraw.onNote(c.id,listener),
    getGeometry:()=>{const space=g_simpleDraw.data(c.id).contentSpace;return space?{...space,x:space.x-SIMPLE_DRAW_INSETS.left,y:space.y-SIMPLE_DRAW_INSETS.top}:null;},
   };
@@ -7325,7 +7333,7 @@ function moveSimpleDrawContent(id,base,dx,dy){
  g_simpleDraw.setData(id,{contentSpace:{...base,x:base.x+dx-next.bounds.x,y:base.y+dy-next.bounds.y}});
 }
 function tidySimpleContainer(id){const result=g_layoutAnimation.batch(()=>g_graphPlacement.repairAround(id));g_connectionView.render();window.Persistence?.markDirty?.();if(result.unresolved.length){const notice=document.createElement('p');notice.className='simple-draw-creation-hint';notice.setAttribute('role','status');notice.textContent='This space is crowded. Your drawing stayed in place; move a nearby toy to make more room.';document.body.append(notice);setTimeout(()=>notice.remove(),6000);}return result;}
-const g_simpleDrawCreation=installSimpleDrawCreation({getViewport:getViewportElement,getWorld:()=>document.getElementById('board'),screenToWorld,
+const g_simpleDrawCreation=installSimpleDrawCreation({getInstrument:id=>g_simpleDraw.line(id)?.source.instrument||'PIANO',getViewport:getViewportElement,getWorld:()=>document.getElementById('board'),screenToWorld,
  onArm:()=>{g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_stringBoard.cancel();},
  canCreate:()=>!g_artInternal.active,
  unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},

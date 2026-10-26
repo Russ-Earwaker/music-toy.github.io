@@ -1,4 +1,5 @@
 import {decorateCircularControl} from './circular-control.js';
+import {features, canCreateToy, canUsePalette} from './runtime-config.js';
 import {uiMode} from './ui-mode.js';
 import {simpleCreationGroups} from './simple-creation-palette.js';
 // src/toy-spawner.js
@@ -118,10 +119,12 @@ function updatePaletteToggleUI() {
 }
 
 function togglePalette(palette) {
+  if (!canUsePalette(palette)) return;
   const open = uiMode.isSimple() || !state.open || state.activePalette !== palette;
   setActivePalette(palette);setMenuOpen(open);
 }
 function setActivePalette(palette) {
+  if (!canUsePalette(palette)) return;
   const next = palette === 'art'
     ? 'art'
     : (palette === 'game' ? 'game' : palette === 'logic' ? 'logic' : 'music');
@@ -286,6 +289,9 @@ function ensureDock() {
   arrange.style.setProperty('--c-btn-bg','rgba(76,130,116,.95)');arrange.style.setProperty('--c-btn-size','var(--toy-spawner-button-size)');
   arrange.addEventListener('click',()=>{setMenuOpen(false);document.dispatchEvent(new CustomEvent('arrange:request'));});
   dock.append(trash, toggle, arrange, artToggle, logicToggle, gameToggle, overview, help, menu);
+  for (const [button, available] of [[artToggle, features.systems.art], [logicToggle, features.creation.logic], [gameToggle, features.creation.game], [arrange, features.interface.advanced]]) {
+    if (!available) button.remove();
+  }
   document.body.appendChild(dock);
 
   state.dock = dock;
@@ -453,6 +459,7 @@ function syncCreationModeUI(){
 }
 
 function openAdvancedPalette() {
+  if (!features.interface.advanced) return false;
   setMenuOpen(false);
   openAdvancedLogic({anchor:state.logicToggle,returnFocus:state.logicToggle,
     onChoose:type=>spawnAtDefault(logicCreationEntry(type)),
@@ -464,7 +471,7 @@ function safeCatalog() {
   try {
     const items = state.config.getCatalog?.() || [];
     if (!Array.isArray(items)) return [];
-    const filtered = items.filter((item) => item && item.name && (item.type || typeof item.action === 'function') && (!uiMode.isSimple() || state.activePalette === 'art' || (state.activePalette === 'music' && item.simpleCategory)));
+    const filtered = items.filter((item) => item && canUsePalette(state.activePalette) && (state.activePalette !== 'music' || canCreateToy(item.type)) && item.name && (item.type || typeof item.action === 'function') && (!uiMode.isSimple() || state.activePalette === 'art' || (state.activePalette === 'music' && item.simpleCategory)));
     if (!filtered.length) {
       dbg('catalog empty', state.activePalette, { rawCount: items.length });
     }
@@ -476,7 +483,7 @@ function safeCatalog() {
 }
 
 function invokeEntryAction(entry) {
-  if (!entry || typeof entry.action !== 'function') return false;
+  if (!entry || !canUsePalette(state.activePalette) || (state.activePalette === 'music' && !canCreateToy(entry.type)) || typeof entry.action !== 'function') return false;
   try {
     const result = entry.action();
     return result !== false;

@@ -3,15 +3,16 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {Node,walk,dom,CustomEvent,event} from './graph-ui-dom.mjs';
+import {features, PRESETS, canCreateToy, canCreateBackingToy, canUsePalette} from '../src/runtime-config.js';
 import {simpleCreationGroups} from '../src/simple-creation-palette.js';
 import {createUIMode} from '../src/ui-mode.js';
 import {decorateCircularControl} from '../src/circular-control.js';
 
 const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
 const spawner=readFileSync(new URL('../src/toy-spawner.js',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export const ToySpawner','const ToySpawner');
-function fixture(){
+function fixture(config=features){
  const {document,window}=dom(),board=new Node();board.id='board';board.className='board-viewport';document.body.append(board);
- const uiMode=createUIMode(),calls=[];let changed=()=>{};
+ const uiMode=createUIMode({config}),calls=[];let changed=()=>{};
  const g_stringBoard={activeKind:null,arm:kind=>{clear();g_stringBoard.activeKind=kind;calls.push(['string.arm',kind]);},cancel:()=>{g_stringBoard.activeKind=null;}};
  const clear=()=>{g_stringBoard.activeKind=null;window.BouncerBoard.activeMode=null;document.body.classList.remove('bouncer-board-armed','simple-ripple-armed','simple-draw-creating','simple-drum-armed');};
  const g_bouncerBoard={arm:options=>{clear();window.BouncerBoard.activeMode=options.mode||'ball';document.body.classList.add('bouncer-board-armed');calls.push(['bouncer.arm',{...options}]);return true;},cancel:()=>{window.BouncerBoard.activeMode=null;document.body.classList.remove('bouncer-board-armed');}};
@@ -19,7 +20,7 @@ function fixture(){
  const g_simpleDrawCreation={arm:()=>{clear();document.body.classList.add('simple-draw-creating');calls.push(['paint.arm']);},cancel:()=>document.body.classList.remove('simple-draw-creating')};
  window.BouncerBoard={activeMode:null,isRelevant:()=>false};
  const g_drumBoard={createSet:()=>{calls.push(['drum.set']);return [];},arm:()=>{clear();document.body.classList.add('simple-drum-armed');calls.push(['drum.arm']);return true;},cancel:()=>document.body.classList.remove('simple-drum-armed')};
- const context={document,window,CustomEvent,console,uiMode,decorateCircularControl,simpleCreationGroups,g_drumBoard,g_bouncerBoard,g_rippleBoard,g_simpleDrawCreation,g_stringBoard,g_artInternal:{active:false},g_creationHeartbeatId:null,MAIN_TRANSPORT_ID:'main',
+ const context={features:config,SIMPLE_TOY_BACKING:Symbol(),canCreateBackingToy:(type,owner)=>canCreateBackingToy(type,owner,config),canCreateToy:type=>canCreateToy(type,config),canUsePalette:palette=>canUsePalette(palette,config),document,window,CustomEvent,console,uiMode,decorateCircularControl,simpleCreationGroups,g_drumBoard,g_bouncerBoard,g_rippleBoard,g_simpleDrawCreation,g_stringBoard,g_artInternal:{active:false},g_creationHeartbeatId:null,MAIN_TRANSPORT_ID:'main',
   activateBoardBouncer:()=>g_bouncerBoard.arm({}),isExperimentalEnabled:()=>true,EXPERIMENTAL_TOYS:[],
   screenToWorld:p=>p,toggleHelp:()=>false,isHelpActive:()=>false,overviewMode:{isActive:()=>false},setTimeout,clearTimeout,
   MutationObserver:class{constructor(callback){changed=callback;}observe(){}},
@@ -78,3 +79,14 @@ test('Advanced preserves its flat registry view and its existing contextual avai
  f.uiMode.set('simple');assert.deepEqual(f.cards().map(c=>c.getAttribute('aria-label')),['Cube','Ball','Gravity Ball','Ripple','Paint','Drum','Drum Set','String','Strum']);
 });
 
+
+test('playtest offers exactly nine working actions, removes unavailable dock buttons and rejects legacy creation',()=>{
+ const f=fixture(PRESETS.simplePlaytest);f.open();
+ assert.equal(f.uiMode.get(),'simple');f.uiMode.set('advanced');assert.equal(f.uiMode.get(),'simple');
+ for(const cls of ['art','logic','game','arrange']) assert.equal(f.document.querySelector('.toy-spawner-'+cls),null);
+ const types=f.cards().map(c=>c.dataset.toyType);
+ assert.equal(types.length,9);
+ for(const type of types){const before=f.calls.length;f.click(type);assert.ok(f.calls.length>before,type);}
+ assert.equal(f.context.createToyPanelAt('drawgrid'),null);
+ assert.equal(f.window.ToySpawner.openAdvancedLogic(),false);
+});

@@ -1,4 +1,7 @@
 import {uiMode} from './ui-mode.js';
+import {features} from './runtime-config.js';
+document.querySelector('.ui-mode-chrome')?.toggleAttribute('hidden', !features.interface.modeSwitcher);
+if (features.titleSuffix) document.title += features.titleSuffix;
 const buttons = document.querySelectorAll('#ui-mode [data-ui-mode]');
 const sync = mode => {
   for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.uiMode === mode));
