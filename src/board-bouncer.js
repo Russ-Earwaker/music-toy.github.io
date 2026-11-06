@@ -4,6 +4,7 @@ import {boardLaunch,predictCannonTrajectory,CANNON_BARREL_LENGTH,BALL_LAUNCH_SPE
 import {seedTriggerCubes,triggerCreationPoint} from './trigger-starter-cubes.js';
 import {createBoardInteractionHint,SIMPLE_PLACE_HINT_DELAY} from './simple-interaction-hint.js';
 import {trajectoryPoints} from './trajectory-presentation.js';
+import {shapeDefinition,shapeClip} from './simple-shapes.js';
 
 // Board DOM/SVG is presentation only. Physical positions are logical world units;
 // playback positions are sampled from canonical transport phase, never simulated.
@@ -22,7 +23,7 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
   if(!gesture||gesture.mode==='cube'||Math.hypot(gesture.current.x-gesture.start.x,gesture.current.y-gesture.start.y)<6){creationPath.setAttribute('points','');aim.setAttribute('d','');previewKey=null;return;}
   const {launch,containerId,ballMode}=launchFor(gesture,gesture.current),cubes=getCollisionObjects(),bars=controller.data(containerId)?.bars||1,bpm=getBpm(containerId);
   const instrument=controller.data(containerId)?.instrument||objects.get(gesture.ballId)?.instrument||'tone';applyInstrumentColour(aim,instrument);applyInstrumentColour(creationPath,instrument);
-  const key=JSON.stringify([ballMode,launch,bars,bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.radius,c.sourceMidi,c.segments,c.surfaceRadius])]);
+  const key=JSON.stringify([ballMode,launch,bars,bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.radius,c.sourceMidi,c.segments,c.surfaceRadius,c.shapeType,c.polygon,c.rotation])]);
   if(key===previewKey)return;previewKey=key;
   drawTrajectory(creationPath,predictCannonTrajectory({launch,cubes,bars,bpm,ballMode}));
   const ux=launch.vx/BALL_LAUNCH_SPEED,uy=launch.vy/BALL_LAUNCH_SPEED,x=launch.x+ux*CANNON_BARREL_LENGTH,y=launch.y+uy*CANNON_BARREL_LENGTH;
@@ -42,7 +43,8 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
     if(o.kind!=='ball')node.addEventListener('pointerdown',e=>startCube(e,o.id));root.append(node);nodes.set(o.id,node);
    }
    node.dataset.ballMode=o.ballMode||'normal';node.textContent=o.kind==='ball'&&o.ballMode==='gravity'?'\u2193':'';
-   node.setAttribute('aria-label',o.kind==='cube'?`Cube, note ${o.sourceMidi}. Drag to move; Delete to remove.`:(o.ballMode==='gravity'?'Gravity Ball.':'Ball.')+' Drag to throw; Delete to remove.');node.title=node.getAttribute('aria-label');
+   node.setAttribute('aria-label',o.kind==='cube'?`${shapeDefinition(o.shapeType??'cube').label}, note ${o.sourceMidi}. Drag to move; Delete to remove.`:(o.ballMode==='gravity'?'Gravity Ball.':'Ball.')+' Drag to throw; Delete to remove.');node.title=node.getAttribute('aria-label');
+   if(o.kind==='cube'){node.dataset.shapeType=o.shapeType??'cube';node.style.clipPath=shapeClip(o.shapeType??'cube');}
    const width=o.kind==='cube'?o.width:(o.radius||12)*2,height=o.kind==='cube'?o.height:(o.radius||12)*2;
    Object.assign(node.style,{left:o.x+'px',top:o.y+'px',width:width+'px',height:height+'px'});if(o.kind==='cube')node.style.setProperty('--cube-color',BOUNCER_BASE_ORANGE);
   }
@@ -58,7 +60,8 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
  }
  function arm(options={}){
   if(!canInteract())return false;
-  if(options.mode&&armed&&(armed.mode||'ball')===options.mode){cancel();return true;}
+  if(options.mode==='cube')shapeDefinition(options.shapeType??'cube');
+  if(options.mode&&armed&&(armed.mode||'ball')===options.mode&&(options.mode!=='cube'||(armed.shapeType??'cube')===(options.shapeType??'cube'))){cancel();return true;}
   cancel();onArm();armed=options;
   if((options.mode||'ball')!=='cube'&&options.seed!==false)seedTriggerCubes({objects,center:triggerCreationPoint({viewport:getViewport(),screenToWorld}),otherReceivers:getCollisionObjects().map(o=>o.boardObject)});
   if((options.mode||'ball')!=='cube'&&!options.ballId&&!options.containerId)teaching=createBoardInteractionHint({getWorld,getViewport,screenToWorld,label:'SWIPE',demo:'swipe',ballMode:options.mode==='gravity'?'gravity':'normal',getCubes:()=>options.mode==='gravity'?getCollisionObjects().map(o=>o.boardObject||o):objects.list('cube')});
@@ -76,12 +79,12 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
   if(!ball&&!armed)return;
   if(!ball&&e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.heartbeat-toy,.container-toy'))return;
   teaching?.dispose();teaching=null;swallow(e);unlock();ball?.focus({preventScroll:true});const point=screenToWorld(e),ballId=ball?.dataset.physicalId||armed?.ballId||null;
-  gesture={pointer:e.pointerId,start:point,current:point,ballId,containerId:armed?.containerId||null,mode:ball?(objects.get(ballId)?.ballMode==='gravity'?'gravity':'ball'):armed?.mode||'ball'};getViewport().setPointerCapture?.(e.pointerId);
+  gesture={pointer:e.pointerId,start:point,current:point,ballId,containerId:armed?.containerId||null,shapeType:armed?.shapeType??'cube',mode:ball?(objects.get(ballId)?.ballMode==='gravity'?'gravity':'ball'):armed?.mode||'ball'};getViewport().setPointerCapture?.(e.pointerId);
  }
  function move(e){if(e.pointerId!==gesture?.pointer)return;swallow(e);gesture.current=screenToWorld(e);updateCreationPreview();}
  async function up(e){
   if(e.pointerId!==gesture?.pointer)return;swallow(e);const g=gesture,release=screenToWorld(e);gesture=null;previewKey=null;creationPath.setAttribute('points','');aim.setAttribute('d','');
-  if(g.mode==='cube'){if(Math.hypot(release.x-g.start.x,release.y-g.start.y)<6)objects.addCube(release.x,release.y);return;}
+  if(g.mode==='cube'){if(Math.hypot(release.x-g.start.x,release.y-g.start.y)<6)objects.addCube(release.x,release.y,{shapeType:g.shapeType});return;}
   if(Math.hypot(release.x-g.start.x,release.y-g.start.y)<6)return;
   const ball=objects.get(g.ballId)||objects.addBall(g.start.x,g.start.y,{ballMode:g.mode==='gravity'?'gravity':'normal'});
   const launch=launchFor({...g,ballId:ball.id},release);
@@ -126,5 +129,5 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
  window.addEventListener('pointercancel',cancel);window.addEventListener('blur',cancel);window.addEventListener('keydown',escape,true);
  window.addEventListener('scene:new',cancel);window.addEventListener('scene:load',cancel);
  render();animate();
- return {arm,cancel,isRelevant:relevant,get active(){return !!armed;},get activeMode(){return armed?(armed.mode||'ball'):null;},dispose(){cancel();window.removeEventListener('lostpointercapture',lost);unsubscribe();unsubscribeContainers();cancelAnimationFrame(frame);root.remove();hint.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',cancel);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',escape,true);window.removeEventListener('scene:new',cancel);window.removeEventListener('scene:load',cancel);}};
+ return {arm,cancel,isRelevant:relevant,get active(){return !!armed;},get activeMode(){return armed?(armed.mode||'ball'):null;},get activeShapeType(){return armed?.mode==='cube'?(armed.shapeType??'cube'):null;},dispose(){cancel();window.removeEventListener('lostpointercapture',lost);unsubscribe();unsubscribeContainers();cancelAnimationFrame(frame);root.remove();hint.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',cancel);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',escape,true);window.removeEventListener('scene:new',cancel);window.removeEventListener('scene:load',cancel);}};
 }

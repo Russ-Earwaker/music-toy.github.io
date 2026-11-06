@@ -1,0 +1,53 @@
+PASS {
+  "checks": {
+    "GPU grid has no particle state": true,
+    "stationary contact displaces liquid without movement": true,
+    "finger pushes liquid thickness toward base": true,
+    "moving contact creates a retained disturbance": true,
+    "pressure projection reduces divergence": true,
+    "signed height forms groove, bow wave and side ridge": true,
+    "disturbance advects through the GPU velocity field": true,
+    "disturbance decays without a CPU particle timer": true,
+    "density flows/diffuses back into the channel": true,
+    "height relaxes toward flat after release": true,
+    "long wake retains height after two seconds": true,
+    "GPU activity reduction matches material peak": true,
+    "camera renders do not mutate simulation": true,
+    "visible field scales with board zoom": true,
+    "world domain scroll preserves existing disturbance": true,
+    "no WebGL errors": true,
+    "slow contact deforms and fast contact increases front height": true
+  },
+  "metrics": {
+    "divergenceBefore": 0.08971551761188225,
+    "divergenceAfter": 0.08699459279177413,
+    "height": {
+      "groove": -7.99104102452596,
+      "bow": 1.7836298942565918,
+      "side": 4.173730087280274
+    },
+    "holeBefore": 0.021323812446401764,
+    "holeAfter": 0.05155442158381144,
+    "advectedDistance": 7.5914034831835835,
+    "heightAfterTwoSeconds": 4.4187798500061035,
+    "zoomBounds": [
+      {
+        "width": 221,
+        "height": 80
+      },
+      {
+        "width": 442,
+        "height": 160
+      },
+      {
+        "width": 887,
+        "height": 320
+      }
+    ],
+    "speedHeightPeaks": [
+      7.999960899353027,
+      10.36768913269043
+    ],
+    "textureBytes": 3713744
+  }
+}

@@ -1,5 +1,6 @@
 import {resolveBoardInteraction} from './board-object.js';
 import {projectSegment,worldSegment} from './receiver-surface.js';
+import {pointInPolygon} from './simple-shapes.js';
 
 export function waveReceiverContacts(origin,receiver){
  const segments=receiver.capabilities?.playable?.surface?.segments;
@@ -15,6 +16,10 @@ export function waveReceiverDistance(origin,receiver){
  const dx=origin.x-t.x,dy=origin.y-t.y,angle=-(t.rotation||0);
  const x=dx*Math.cos(angle)-dy*Math.sin(angle),y=dx*Math.sin(angle)+dy*Math.cos(angle);
  if(Number.isFinite(b.radius))return Math.max(0,Math.hypot(x,y)-b.radius);
+ if(b.polygon){
+  const point={x,y};if(pointInPolygon(point,b.polygon))return 0;
+  return Math.min(...b.polygon.map((p,i)=>projectSegment(point,p,b.polygon[(i+1)%b.polygon.length]).distance));
+ }
  return Math.hypot(Math.max(0,Math.abs(x)-(b.width||0)/2),Math.max(0,Math.abs(y)-(b.height||0)/2));
 }
 

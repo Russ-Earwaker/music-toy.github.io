@@ -1,3 +1,4 @@
+import {pointInPolygon} from './simple-shapes.js';
 const clamp=n=>Math.max(0,Math.min(1,n));
 export function surfaceRegions(count=8){return Array.from({length:count},(_,index)=>({index,start:index/count,end:(index+1)/count}));}
 export function surfaceRegionIndex(surface,progress){
@@ -38,4 +39,15 @@ export function sweepCapsule(ball,velocity,segment,radius,limit){
  for(const sign of [-1,1]){const time=(sign*radius-y)/vn,along=x+(vx*tx+vy*ty)*time;if(vn*sign<0&&time>=-1e-10&&time<=limit&&along>=0&&along<=length)hits.push({time:Math.max(0,time),nx:sign*nx,ny:sign*ny});}
  for(const end of [a,b]){const qx=ball.x-end.x,qy=ball.y-end.y,A=vx*vx+vy*vy,B=qx*vx+qy*vy,C=qx*qx+qy*qy-radius*radius,D=B*B-A*C;if(D<0||!A)continue;const time=(-B-Math.sqrt(D))/A;if(time>=-1e-10&&time<=limit){const x=qx+vx*time,y=qy+vy*time,d=Math.hypot(x,y);hits.push({time:Math.max(0,time),nx:x/d,ny:y/d});}}
  return hits.sort((a,b)=>a.time-b.time)[0]||null;
+}
+// Filled polygon plus a swept ball radius. Reuses the existing edge capsules,
+// including rounded vertex contacts and concave Star recesses.
+export function sweepPolygon(ball,velocity,polygon,radius,limit){
+ const segments=polygon.map((a,i)=>({a,b:polygon[(i+1)%polygon.length]}));
+ if(pointInPolygon(ball,polygon)){
+  const nearest=segments.map(s=>projectSegment(ball,s.a,s.b)).sort((a,b)=>a.distance-b.distance)[0];
+  const dx=nearest.position.x-ball.x,dy=nearest.position.y-ball.y,d=nearest.distance;
+  if(d>1e-9)return {time:0,nx:dx/d,ny:dy/d,overlap:radius+d};
+ }
+ return segments.map(s=>sweepCapsule(ball,velocity,s,radius,limit)).filter(Boolean).sort((a,b)=>a.time-b.time)[0]||null;
 }

@@ -122,7 +122,7 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
  // cube edits replace only its remaining path and unsounded impact notes.
  // An edited flight remains live; publish its settled replacement next loop.
  const previews=new Map(),flights=new Map(),hooks=new Map();
- function geometryKey(d,launch,cubes){return JSON.stringify([ballMode(d.ballMode),launch,d.capture.durationTicks,d.capture.bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.radius,c.size,c.sourceMidi,c.segments,c.surfaceRadius])]);}
+ function geometryKey(d,launch,cubes){return JSON.stringify([ballMode(d.ballMode),launch,d.capture.durationTicks,d.capture.bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.radius,c.size,c.sourceMidi,c.segments,c.surfaceRadius,c.shapeType,c.polygon,c.rotation])]);}
  function flightAt(id,d,cycle){
   let cycles=flights.get(id);if(!cycles){cycles=new Map();flights.set(id,cycles);}
   if(cycles.has(cycle))return cycles.get(cycle);
@@ -192,10 +192,10 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
   if(event.type==='restore'){previews.clear();flights.clear();return;}
   for(const c of containers.list().filter(c=>c.presentation.type==='simple-bouncer')){
    const d=c.interactionData;if(!d?.capture||d.version!==3)continue;
-   const geometryChange=event.type!=='update'||['x','y','width','height','segments','surfaceRadius'].some(k=>JSON.stringify(event.object[k])!==JSON.stringify(event.previous[k]));
+   const geometryChange=event.type!=='update'||['x','y','width','height','segments','surfaceRadius','radius','shapeType','polygon','rotation'].some(k=>JSON.stringify(event.object[k])!==JSON.stringify(event.previous[k]));
    const cubeChange=!!event.object.boardObject?.capabilities.triggerReceiver&&(geometryChange||d.cubeIds?.includes(event.object.id)),ballDeleted=event.object.kind==='ball'&&event.type==='remove'&&d.ballId===event.object.id;
    if(!cubeChange&&!ballDeleted)continue;
-   if(event.type==='update'&&['x','y','width','height','sourceMidi','segments','surfaceRadius'].every(k=>JSON.stringify(event.object[k])===JSON.stringify(event.previous[k])))continue;
+   if(event.type==='update'&&['x','y','width','height','sourceMidi','segments','surfaceRadius','radius','shapeType','polygon','rotation'].every(k=>JSON.stringify(event.object[k])===JSON.stringify(event.previous[k])))continue;
    const transport=getTransport(c.id);
    if(cubeChange&&transport?.state==='playing')reviseFlight(c.id,d,transport,event);
    d.stale=true;d.brokenReferences=[...(d.cubeIds||[]),d.ballId].filter(id=>id&&!objects.get(id)&&!getCollisionObjects().some(o=>o.id===id));setData(c.id,d);

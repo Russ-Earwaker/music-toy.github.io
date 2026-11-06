@@ -1,0 +1,188 @@
+PASS {
+  "checks": {
+    "dark wake perceptible at two seconds": true,
+    "dark optical response settles by four seconds": true,
+    "dark contrast decreases progressively": true,
+    "grid wake perceptible at two seconds": true,
+    "grid optical response settles by four seconds": true,
+    "grid contrast decreases progressively": true,
+    "art wake perceptible at two seconds": true,
+    "art optical response settles by four seconds": true,
+    "art contrast decreases progressively": true,
+    "memory meaningfully amplifies identical shallow deformation": true,
+    "render components never mutate physical state": true,
+    "instrument colour never tints refractive body": true,
+    "FINAL WITHOUT TINT is instrument independent": true,
+    "meniscus remains translucent": true,
+    "flat height with strong memory draws nothing": true,
+    "no WebGL errors": true
+  },
+  "metrics": {
+    "recovery": [
+      {
+        "age": 0,
+        "physical": {
+          "hash": 3124348160,
+          "height": 4549.051331043243,
+          "memory": 736.9539955361934,
+          "slope": 203.51982224948455,
+          "peakHeight": 11.470132827758789
+        },
+        "backgrounds": {
+          "dark": {
+            "contrastSum": 3464918.1869306546,
+            "readablePixels": 119532,
+            "peakContrast": 95.24183006535948,
+            "alpha": 34629889
+          },
+          "grid": {
+            "contrastSum": 3442672.24575385,
+            "readablePixels": 119187,
+            "peakContrast": 105.16993464052287,
+            "alpha": 34629889
+          },
+          "art": {
+            "contrastSum": 2255091.4013085924,
+            "readablePixels": 106969,
+            "peakContrast": 127.12549019607843,
+            "alpha": 34629889
+          }
+        }
+      },
+      {
+        "age": 0.5,
+        "physical": {
+          "hash": 3815315628,
+          "height": 3803.4087920188904,
+          "memory": 557.5628597356986,
+          "slope": 147.25088120370486,
+          "peakHeight": 7.9749274253845215
+        },
+        "backgrounds": {
+          "dark": {
+            "contrastSum": 2923026.196079961,
+            "readablePixels": 109007,
+            "peakContrast": 95.24183006535948,
+            "alpha": 33714281
+          },
+          "grid": {
+            "contrastSum": 2904937.964707266,
+            "readablePixels": 109039,
+            "peakContrast": 112.83660130718954,
+            "alpha": 33714281
+          },
+          "art": {
+            "contrastSum": 1901337.955554021,
+            "readablePixels": 94213,
+            "peakContrast": 127.48235294117649,
+            "alpha": 33714281
+          }
+        }
+      },
+      {
+        "age": 1,
+        "physical": {
+          "hash": 879238633,
+          "height": 3182.9676699638367,
+          "memory": 405.26053727988,
+          "slope": 103.79843997594128,
+          "peakHeight": 7.7689642906188965
+        },
+        "backgrounds": {
+          "dark": {
+            "contrastSum": 2243194.287582658,
+            "readablePixels": 95868,
+            "peakContrast": 95.24183006535948,
+            "alpha": 31829283
+          },
+          "grid": {
+            "contrastSum": 2229348.1673211874,
+            "readablePixels": 95682,
+            "peakContrast": 112.50326797385621,
+            "alpha": 31829283
+          },
+          "art": {
+            "contrastSum": 1377856.695423781,
+            "readablePixels": 82914,
+            "peakContrast": 133.53986928104572,
+            "alpha": 31829283
+          }
+        }
+      },
+      {
+        "age": 2,
+        "physical": {
+          "hash": 4234063053,
+          "height": 2139.3926916122437,
+          "memory": 180.55405713573413,
+          "slope": 45.485319888222236,
+          "peakHeight": 4.552968978881836
+        },
+        "backgrounds": {
+          "dark": {
+            "contrastSum": 1155614.9777773886,
+            "readablePixels": 62330,
+            "peakContrast": 94.83660130718954,
+            "alpha": 25182494
+          },
+          "grid": {
+            "contrastSum": 1148927.2444440753,
+            "readablePixels": 61918,
+            "peakContrast": 103.83660130718954,
+            "alpha": 25182494
+          },
+          "art": {
+            "contrastSum": 694061.0013069713,
+            "readablePixels": 48003,
+            "peakContrast": 111.47712418300652,
+            "alpha": 25182494
+          }
+        }
+      },
+      {
+        "age": 4,
+        "physical": {
+          "hash": 1644710738,
+          "height": 1169.7982926368713,
+          "memory": 5.124482267251122,
+          "slope": 13.221293222984304,
+          "peakHeight": 0.4966564178466797
+        },
+        "backgrounds": {
+          "dark": {
+            "contrastSum": 152406.16078425548,
+            "readablePixels": 335,
+            "peakContrast": 2.2222222222222245,
+            "alpha": 11991847
+          },
+          "grid": {
+            "contrastSum": 151891.28366008427,
+            "readablePixels": 421,
+            "peakContrast": 2.7254901960784306,
+            "alpha": 11991847
+          },
+          "art": {
+            "contrastSum": 127065.00784310664,
+            "readablePixels": 160,
+            "peakContrast": 3.5084967320261504,
+            "alpha": 11991847
+          }
+        }
+      }
+    ],
+    "shallow": {
+      "withoutMemory": {
+        "contrastSum": 41905.80000000529,
+        "readablePixels": 5500,
+        "peakContrast": 20.441830065359472,
+        "alpha": 2007672
+      },
+      "withMemory": {
+        "contrastSum": 130927.9803921479,
+        "readablePixels": 13083,
+        "peakContrast": 58.87450980392156,
+        "alpha": 3622374
+      }
+    }
+  }
+}

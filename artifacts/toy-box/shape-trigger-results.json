@@ -1,0 +1,56 @@
+[
+  {
+    "shapeType": "cube",
+    "triggers": [
+      "normal",
+      "gravity",
+      "ripple"
+    ],
+    "pitch": 60
+  },
+  {
+    "shapeType": "circle",
+    "triggers": [
+      "normal",
+      "gravity",
+      "ripple"
+    ],
+    "pitch": 62
+  },
+  {
+    "shapeType": "triangle",
+    "triggers": [
+      "normal",
+      "gravity",
+      "ripple"
+    ],
+    "pitch": 67
+  },
+  {
+    "shapeType": "diamond",
+    "triggers": [
+      "normal",
+      "gravity",
+      "ripple"
+    ],
+    "pitch": 69
+  },
+  {
+    "shapeType": "hexagon",
+    "triggers": [
+      "normal",
+      "gravity",
+      "ripple"
+    ],
+    "pitch": 60
+  },
+  {
+    "shapeType": "star",
+    "triggers": [
+      "normal",
+      "gravity",
+      "ripple"
+    ],
+    "pitch": 62
+  }
+]

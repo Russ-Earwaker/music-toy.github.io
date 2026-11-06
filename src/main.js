@@ -101,7 +101,7 @@ import {createSimpleBouncerController} from './simple-bouncer.js';
 import {installSimpleBouncerSurface} from './simple-bouncer-surface.js';
 import {boardPhysicalObjects} from './board-physical-objects.js';
 import {installBoardBouncer} from './board-bouncer.js';
-import {canCreateToy, canCreateBackingToy} from './runtime-config.js';
+import {canCreateToy, canCreateBackingToy, canCreateShape} from './runtime-config.js';
 import {uiMode} from './ui-mode.js';
 import {installSimpleDrawSurface} from './simple-draw-surface.js';
 import {installSimpleDrawCreation} from './simple-draw-creation.js';
@@ -2176,7 +2176,7 @@ const toyCatalog = [
     {type:'simple-strum',name:'Strum',simpleCategory:'play',simpleOrder:3,isCreationActive:()=>g_stringBoard.activeKind==='strum',description:'Drag out four strings. Swipe across them to record a strum.',action:()=>{g_stringBoard.arm('strum');return true;}},
     { type: 'simple-ripple', name: 'Ripple', simpleCategory:'trigger', simpleOrder:2, isCreationActive:()=>document.body.classList.contains('simple-ripple-armed'), description: 'Tap the board to send a musical wave.', size:{width:76,height:76}, action:()=>{g_rippleBoard.arm();return true;} },
     { type: 'simple-bouncer', name: 'Simple Bouncer', description: 'Scatter cubes, then drag across the board to throw a ball.', action:()=>{activateBoardBouncer();return true;} },
-    { type: 'physical-cube', name: 'Cube', simpleCategory:'place', isCreationActive:()=>window.BouncerBoard?.activeMode==='cube', description: 'Tap empty board space to place shared cubes.', size:{width:58,height:58} },
+    { type: 'physical-cube', name: 'Cube', simpleCategory:'place', activeShapeType:()=>window.BouncerBoard?.activeShapeType??null, isCreationActive:()=>window.BouncerBoard?.activeMode==='cube', description: 'Tap empty board space to place shared cubes.', size:{width:58,height:58} },
     { type:'physical-gravity-ball',name:'Gravity Ball',simpleCategory:'trigger',simpleOrder:1,isCreationActive:()=>window.BouncerBoard?.activeMode==='gravity',description:'Swipe to launch a falling, bouncing ball.',size:{width:26,height:26} },
     { type: 'physical-ball', name: 'Ball', simpleCategory:'trigger', simpleOrder:0, isCreationActive:()=>window.BouncerBoard?.activeMode==='ball', description: 'Draw a throw on empty board space.', size:{width:26,height:26} },
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 800, height: 760 } },
@@ -5972,7 +5972,7 @@ function createToyPanelAt(toyType, {
     creationContext = null,
     centerX,
     centerY,
-    instrument, soundState,
+    instrument, soundState, shapeType=null,
     heartbeatId = g_creationHeartbeatId || MAIN_TRANSPORT_ID,
     autoCenter,
     allowOffscreen = false,
@@ -5991,8 +5991,9 @@ function createToyPanelAt(toyType, {
     if(type==='simple-draw'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.arm({heartbeatId});return null;}
     if(type==='simple-bouncer'){if(artOwnerId||g_artInternal.active)return null;activateBoardBouncer();return null;}
     if(type==='physical-cube'||type==='physical-ball'||type==='physical-gravity-ball'){
+      if(type==='physical-cube'&&!canCreateShape(shapeType??'cube'))return null;
       if(artOwnerId||g_artInternal.active)return null;
-      g_drumBoard.cancel();g_rippleBoard.cancel();g_simpleDrawCreation.cancel();g_bouncerBoard.arm({mode:type==='physical-cube'?'cube':type==='physical-gravity-ball'?'gravity':'ball',seed:type!=='physical-cube'});return null;
+      g_drumBoard.cancel();g_rippleBoard.cancel();g_simpleDrawCreation.cancel();g_bouncerBoard.arm({mode:type==='physical-cube'?'cube':type==='physical-gravity-ball'?'gravity':'ball',seed:type!=='physical-cube',...(type==='physical-cube'&&shapeType?{shapeType}:{})});return null;
     }
     g_bouncerBoard.cancel();
     if (!type || !toyInitializers[type]) {
@@ -7351,6 +7352,12 @@ const g_stringBoard=installStringSurfaceBoard({objects:stringSurfaces,controller
 window.StringSurfaces=stringSurfaces;window.StringSurfaceLoop=g_stringLoop;
 uiMode.subscribe(()=>g_stringBoard.cancel());
 document.addEventListener('toy-spawner:palette-change',()=>g_stringBoard.cancel());
+// Shared cancellation boundary for the two screen-space palettes.
+function cancelSimpleCreation(){
+ g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();g_stringBoard.cancel();
+}
+document.addEventListener('simple-creation:cancel',cancelSimpleCreation);
+document.addEventListener('paint-palette:equip',cancelSimpleCreation);
 const g_containerBoard=installContainerBoard({
  mountVolume:(host,panel)=>installContainerVolumeUI(host,panel,{containers:containerToyModel,getToy:id=>document.getElementById(id)}),
  containers:containerToyModel,getWorld:()=>document.getElementById('board'),getScale:()=>getViewportTransform().scale,

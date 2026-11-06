@@ -1,5 +1,6 @@
 import {physicalBoardObject} from './board-object.js';
 import {makeCube,BALL_RADIUS} from './simple-bouncer-physics.js';
+import {shapeDefinition} from './simple-shapes.js';
 const CUBE_COLOUR='#829cab';
 const pitchSurface=record=>{delete record.instrument;record.color=CUBE_COLOUR;return record;};
 
@@ -12,12 +13,14 @@ export function createBoardPhysicalObjects(){
  const list=kind=>[...records.values()].filter(o=>!kind||o.kind===kind).map(o=>get(o.id));
  function allocate(kind){serial++;let id;do{id=`physical-${kind}:${globalThis.crypto?.randomUUID?.()||`${Date.now()}-${serial}-${Math.random().toString(36).slice(2)}`}`;}while(records.has(id));return id;}
  function cube(x,y,{scatter=false,...options}={}){
+  const shapeType=shapeDefinition(options.shapeType??'cube').id;
   const id=allocate('cube'),defaults=makeCube(serial-1,x,y);
-  const record={...defaults,...options,id,sequence:serial-1,kind:'cube',x,y,width:options.width||58,height:options.height||58};
+  const record={...defaults,...options,shapeType,id,sequence:serial-1,kind:'cube',x,y,width:options.width||58,height:options.height||58};
   pitchSurface(record);records.set(id,record);emit({type:'add',object:get(id),scatter});return get(id);
  }
  function ball(x,y,options={}){const id=allocate('ball');records.set(id,{...options,id,sequence:serial-1,kind:'ball',x,y,radius:BALL_RADIUS});runtime.set(id,{motion:{vx:0,vy:0},captureId:null,captureToyId:null});emit({type:'add',object:get(id)});return get(id);}
  function update(id,changes){const old=records.get(id);if(!old)return null;
+  if(old.kind==='cube'&&'shapeType' in changes)shapeDefinition(changes.shapeType);
   if(['x','y','width','height','radius','sourceMidi'].some(k=>k in changes&&!Number.isFinite(changes[k])))throw Error('Invalid physical object geometry or note.');
   if(['width','height','radius'].some(k=>k in changes&&changes[k]<=0))throw Error('Physical object dimensions must be positive.');
   const safe={...changes};delete safe.id;delete safe.kind;delete safe.boardObject;
@@ -31,10 +34,13 @@ export function createBoardPhysicalObjects(){
  function restore(saved=[]){
   if(!Array.isArray(saved))throw Error('Invalid physical objects');const next=new Map();
   for(const o of saved){if(!o||typeof o.id!=='string'||next.has(o.id)||!['cube','ball'].includes(o.kind)||![o.x,o.y].every(Number.isFinite))throw Error('Invalid physical object');
-   if(o.kind==='cube'&&(![o.width,o.height,o.sourceMidi].every(Number.isFinite)||o.width<=0||o.height<=0))throw Error('Invalid physical cube');
+   if(o.kind==='cube'){
+    if(![o.width,o.height,o.sourceMidi].every(Number.isFinite)||o.width<=0||o.height<=0)throw Error('Invalid physical cube');
+    shapeDefinition(o.shapeType??'cube');
+   }
    if(o.kind==='ball'&&(!Number.isFinite(o.radius)||o.radius<=0||(o.ballMode!=null&&!['normal','gravity'].includes(o.ballMode))))throw Error('Invalid physical ball');next.set(o.id,o.kind==='cube'?pitchSurface(structuredClone(o)):structuredClone(o));
   }
-  records.clear();runtime.clear();for(const [id,o]of next){delete o.boardObject;
+  records.clear();runtime.clear();for(const [id,o]of next){delete o.boardObject;if(o.kind==='cube')o.shapeType??='cube';
    for(const key of ['motion','captureId','captureToyId','glow','collisionFlash','hover','animationPhase','drag'])delete o[key];
    if(o.kind==='ball')runtime.set(id,{motion:{vx:0,vy:0},captureId:null,captureToyId:null});records.set(id,o);if(Number.isFinite(o.sequence))serial=Math.max(serial,o.sequence+1);}emit({type:'restore'});
  }

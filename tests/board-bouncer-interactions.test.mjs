@@ -1,3 +1,5 @@
+import {createReceiverResponses} from '../src/board-receiver-response.js';
+import {createRippleObjects,createSimpleRippleController} from '../src/simple-ripple.js';
 import {simulateThrow} from '../src/simple-bouncer-physics.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +9,7 @@ import {createBoardPhysicalObjects} from '../src/board-physical-objects.js';
 // Minimal event/DOM adapter exercises the actual interaction coordinator; no
 // physics or gesture implementation is duplicated in the fixture.
 class Node {
- constructor(tag='div'){this.tag=tag;this.children=[];this.listeners=new Map();this.dataset={};this.style={setProperty(){}};this.attributes={};this.className='';this.classList={add:(...names)=>{this.className+=' '+names.join(' ');},remove:name=>{this.className=this.className.split(' ').filter(n=>n!==name).join(' ');},toggle:(name,on)=>on?this.classList.add(name):this.classList.remove(name)};}
+ constructor(tag='div'){this.tag=tag;this.children=[];this.listeners=new Map();this.dataset={};this.style={setProperty(k,v){this[k]=v;}};this.attributes={};this.className='';this.classList={add:(...names)=>{this.className+=' '+names.join(' ');},remove:name=>{this.className=this.className.split(' ').filter(n=>n!==name).join(' ');},toggle:(name,on)=>on?this.classList.add(name):this.classList.remove(name)};}
  append(...children){for(const child of children){this.children.push(child);child.parent=this;}}
  prepend(child){this.children.unshift(child);child.parent=this;}
  remove(){if(this.parent)this.parent.children=this.parent.children.filter(n=>n!==this);}
@@ -23,7 +25,7 @@ class Node {
 function fixture(){
  const old={document:globalThis.document,window:globalThis.window,requestAnimationFrame:globalThis.requestAnimationFrame,cancelAnimationFrame:globalThis.cancelAnimationFrame};
  const body=new Node(),world=new Node(),viewport=new Node(),win=new Node();
- globalThis.document={body,createElement:tag=>new Node(tag),createElementNS:(_,tag)=>new Node(tag),querySelectorAll:()=>[]};globalThis.window=win;globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+ globalThis.document={body,createElement:tag=>new Node(tag),createElementNS:(_,tag)=>new Node(tag),querySelectorAll:()=>[]};globalThis.window=win;let nextFrame;globalThis.requestAnimationFrame=fn=>{nextFrame=fn;return 1;};globalThis.cancelAnimationFrame=()=>{};
  const objects=createBoardPhysicalObjects(),calls=[],handles=[];
  const controller={busy:()=>false,data:()=>null,handles:()=>handles,editHandle:(id,kind,p)=>{Object.assign(handles.find(h=>h.kind===kind),p);},ballView:b=>({position:b,trail:[]})};
  const board=installBoardBouncer({objects,controller,getWorld:()=>world,getViewport:()=>viewport,screenToWorld:e=>({x:e.clientX/2,y:e.clientY/2}),unlock(){},createCapture:async request=>{calls.push(request);handles.push({id:'capture:start',containerId:'capture',kind:'start',...request.launch},{id:'capture:target',containerId:'capture',kind:'target',...request.release});objects.update(request.ballId,{captureId:'capture'});}});
@@ -31,8 +33,23 @@ function fixture(){
  const event=(target,x,y)=>({target,clientX:x,clientY:y,pointerId:1,button:0,preventDefault(){},stopPropagation(){},stopImmediatePropagation(){this.stopped=true;}});
  async function dispatch(type,target,x,y){const e=event(target,x,y);await win.dispatch(type,e);if(!e.stopped)await target.dispatch(type,e);}
  const drag=async(target,a,b)=>{await dispatch('pointerdown',target,...a);await dispatch('pointermove',target,...b);await dispatch('pointerup',target,...b);};
- return {controller,board,objects,calls,handles,nodes,world,drag,dispatch,dispose(){board.dispose();Object.assign(globalThis,old);}};
+ return {frame:()=>nextFrame?.(),controller,board,objects,calls,handles,nodes,world,drag,dispatch,dispose(){board.dispose();Object.assign(globalThis,old);}};
 }
+
+test('shared Shape placement persists across repeated taps, switches geometry, and toggles off',async()=>{
+ const f=fixture();try{
+  for(const shapeType of ['cube','circle','triangle','diamond','hexagon','star']){
+   f.board.arm({mode:'cube',shapeType});assert.equal(f.board.activeShapeType,shapeType);
+   const before=f.objects.list('cube').length;
+   for(let i=0;i<3;i++)await f.drag(f.world,[100+i*120,300],[100+i*120,300]);
+   const added=f.objects.list('cube').slice(before);assert.equal(added.length,3);assert.ok(added.every(o=>o.shapeType===shapeType));
+   assert.equal(f.board.activeShapeType,shapeType);
+  }
+  f.board.arm({mode:'cube',shapeType:'star'});assert.equal(f.board.activeShapeType,null);
+  const before=f.objects.list().length;await f.drag(f.world,[800,600],[800,600]);assert.equal(f.objects.list().length,before);
+  f.board.arm({mode:'cube',shapeType:'circle'});f.board.arm({mode:'ball'});assert.equal(f.board.activeShapeType,null);
+ }finally{f.dispose();}
+});
 
 test('Gravity Ball shares creation ownership and curved preview, commits gravity mode only on release',async()=>{
  const f=fixture();try{
@@ -123,6 +140,30 @@ test('cancelling initial Ball drag clears preview without creating Ball or Canno
   await f.dispatch('pointerdown',f.world,0,0);await f.dispatch('pointermove',f.world,200,0);assert.ok(line.getAttribute('points'));
   await f.dispatch(type,f.world,200,0);assert.equal(line.getAttribute('points'),'');assert.equal(f.calls.length,0);assert.equal(f.objects.list('ball').length,0);assert.equal(f.objects.list('cube').length,3);
   await f.dispatch('pointerup',f.world,200,0);assert.equal(f.calls.length,0);
+  }
+ }finally{f.dispose();}
+});
+
+test('all Shape renderers receive Ball, Gravity and Ripple hit feedback without owning timbre',()=>{
+ const f=fixture();try{
+  const responses=createReceiverResponses(),transport={currentTick:0};f.controller.receiverResponses=()=>responses.responses();
+  for(const shapeType of ['cube','circle','triangle','diamond','hexagon','star']){
+   const shape=f.objects.addCube(200,0,{shapeType,sourceMidi:71});
+   const node=f.nodes().find(n=>n.id===shape.id);
+   for(const ballMode of ['normal','gravity']){
+    const capture=simulateThrow({cubes:[shape],launch:{x:0,y:ballMode==='gravity'?-20:0,vx:840,vy:0},ballMode}),hit=capture.collisions[0];
+    assert.ok(hit);transport.currentTick=hit.tick;
+    responses.enqueue({receiverId:shape.id,emitterId:ballMode,cycleStart:0,intendedTick:hit.timeSeconds*192,eventTick:hit.tick},transport);
+    f.frame();assert.ok(Number(node.style['--cube-flash'])>0,shapeType+' '+ballMode);
+    responses.clear(ballMode);
+   }
+   const objects=createRippleObjects(),ripple=objects.create({x:0,y:0,instrument:'PIANO'});
+   const controller=createSimpleRippleController({objects,getReceivers:()=>[shape.boardObject],getClock:()=>({audioTime:0,currentTick:0,bpm:120}),schedule:event=>{
+    transport.currentTick=event.eventTick;responses.enqueue({...event,intendedTick:event.eventTick},transport);
+   }});
+   controller.emit(ripple.id);f.frame();assert.ok(Number(node.style['--cube-flash'])>0,shapeType+' Ripple');
+   assert.equal(node.style['--cube-color'],'#ff8c00');assert.equal(f.objects.get(shape.id).instrument,undefined);
+   responses.clear(ripple.id);controller.destroy();f.frame();assert.equal(Number(node.style['--cube-flash']),0);
   }
  }finally{f.dispose();}
 });

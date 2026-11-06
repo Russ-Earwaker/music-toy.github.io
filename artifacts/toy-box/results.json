@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": "persistent six-shape chooser, exact repeated-placement/switch/deselect/reopen flow, six geometry save roundtrips, Ball/Gravity/Ripple trigger matrix, preset, Advanced isolation, paint coordination, responsive widths, reduced motion",
+  "errors": []
+}

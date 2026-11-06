@@ -1,0 +1,232 @@
+[
+  {
+    "name": "longCurve",
+    "after": 0,
+    "scale": 1,
+    "clock": 3600,
+    "proofs": [
+      {
+        "quality": "high",
+        "active": true,
+        "timing": {
+          "simulationMs": 1.5,
+          "renderMs": 0.6000000014901161,
+          "fps": 1000,
+          "framebuffer": [
+            751,
+            636
+          ],
+          "densityBuffer": [
+            512,
+            256
+          ],
+          "densityBytes": 1572864,
+          "effects": 1,
+          "renderTechnique": "world density + advected disturbance + edge/flow shade"
+        }
+      },
+      {
+        "quality": "high",
+        "backend": "gpu-field",
+        "active": true,
+        "timing": {
+          "simulationMs": 0,
+          "renderMs": 0.5,
+          "activityMs": 1.7000000029802322,
+          "gpuMs": 0.3384,
+          "gpuMeanMs": 1.3544074766355136,
+          "gpuSamples": 107,
+          "framebuffer": [
+            751,
+            636
+          ]
+        },
+        "textureBytes": 1441808
+      }
+    ]
+  },
+  {
+    "name": "longCurve",
+    "after": 500,
+    "scale": 1,
+    "clock": 4100,
+    "proofs": [
+      {
+        "quality": "high",
+        "active": true,
+        "timing": {
+          "simulationMs": 2.2999999970197678,
+          "renderMs": 0.19999999552965164,
+          "fps": 30.00000000000191,
+          "framebuffer": [
+            751,
+            636
+          ],
+          "densityBuffer": [
+            512,
+            256
+          ],
+          "densityBytes": 1572864,
+          "effects": 1,
+          "renderTechnique": "world density + advected disturbance + edge/flow shade"
+        }
+      },
+      {
+        "quality": "high",
+        "backend": "gpu-field",
+        "active": true,
+        "timing": {
+          "simulationMs": 0.20000000298023224,
+          "renderMs": 0.5,
+          "activityMs": 1.6000000014901161,
+          "gpuMs": 0.360608,
+          "gpuMeanMs": 1.3016485245901641,
+          "gpuSamples": 122,
+          "framebuffer": [
+            751,
+            636
+          ]
+        },
+        "textureBytes": 1441808
+      }
+    ]
+  },
+  {
+    "name": "longCurve",
+    "after": 1000,
+    "scale": 1,
+    "clock": 4599.999999999995,
+    "proofs": [
+      {
+        "quality": "high",
+        "active": true,
+        "timing": {
+          "simulationMs": 2.600000001490116,
+          "renderMs": 0,
+          "fps": 30.000000000000274,
+          "framebuffer": [
+            751,
+            636
+          ],
+          "densityBuffer": [
+            512,
+            256
+          ],
+          "densityBytes": 1572864,
+          "effects": 1,
+          "renderTechnique": "world density + advected disturbance + edge/flow shade"
+        }
+      },
+      {
+        "quality": "high",
+        "backend": "gpu-field",
+        "active": true,
+        "timing": {
+          "simulationMs": 0.10000000149011612,
+          "renderMs": 0.19999999552965164,
+          "activityMs": 2,
+          "gpuMs": 0.983008,
+          "gpuMeanMs": 1.3519921726618707,
+          "gpuSamples": 139,
+          "framebuffer": [
+            751,
+            636
+          ]
+        },
+        "textureBytes": 1441808
+      }
+    ]
+  },
+  {
+    "name": "longCurve",
+    "after": 2000,
+    "scale": 1,
+    "clock": 5599.999999999986,
+    "proofs": [
+      {
+        "quality": "high",
+        "active": true,
+        "timing": {
+          "simulationMs": 2.2000000029802322,
+          "renderMs": 0.10000000149011612,
+          "fps": 30.000000000000274,
+          "framebuffer": [
+            751,
+            636
+          ],
+          "densityBuffer": [
+            512,
+            256
+          ],
+          "densityBytes": 1572864,
+          "effects": 1,
+          "renderTechnique": "world density + advected disturbance + edge/flow shade"
+        }
+      },
+      {
+        "quality": "high",
+        "backend": "gpu-field",
+        "active": true,
+        "timing": {
+          "simulationMs": 0.10000000149011612,
+          "renderMs": 0.20000000298023224,
+          "activityMs": 4.899999998509884,
+          "gpuMs": 3.601728,
+          "gpuMeanMs": 1.4166041676646708,
+          "gpuSamples": 167,
+          "framebuffer": [
+            751,
+            636
+          ]
+        },
+        "textureBytes": 1441808
+      }
+    ]
+  },
+  {
+    "name": "longCurve",
+    "after": 4000,
+    "scale": 1,
+    "clock": 7599.999999999968,
+    "proofs": [
+      {
+        "quality": "high",
+        "active": true,
+        "timing": {
+          "simulationMs": 2.100000001490116,
+          "renderMs": 0.09999999403953552,
+          "fps": 30.000000000000274,
+          "framebuffer": [
+            751,
+            636
+          ],
+          "densityBuffer": [
+            512,
+            256
+          ],
+          "densityBytes": 1572864,
+          "effects": 1,
+          "renderTechnique": "world density + advected disturbance + edge/flow shade"
+        }
+      },
+      {
+        "quality": "high",
+        "backend": "gpu-field",
+        "active": true,
+        "timing": {
+          "simulationMs": 0,
+          "renderMs": 0.20000000298023224,
+          "activityMs": 8.5,
+          "gpuMs": 1.284064,
+          "gpuMeanMs": 1.470151668202765,
+          "gpuSamples": 217,
+          "framebuffer": [
+            751,
+            636
+          ]
+        },
+        "textureBytes": 1441808
+      }
+    ]
+  }
+]

@@ -5,3 +5,6 @@
 /resources/debug-output/regression-qa/*.log
 /resources/debug-output/regression-qa/replay.json
 /resources/debug-output/regression-qa/phrase.json
+/artifacts/liquid-audit/chrome-profile/
+/artifacts/liquid-optics/chrome-profile/
+/artifacts/liquid-depth/chrome-profile/

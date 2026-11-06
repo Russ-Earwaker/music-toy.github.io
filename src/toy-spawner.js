@@ -1,7 +1,8 @@
 import {decorateCircularControl} from './circular-control.js';
-import {features, canCreateToy, canUsePalette} from './runtime-config.js';
+import {features, canCreateToy, canCreateShape, canUsePalette} from './runtime-config.js';
 import {uiMode} from './ui-mode.js';
 import {simpleCreationGroups} from './simple-creation-palette.js';
+import {simpleShapes, toyPreview} from './simple-toy-preview.js';
 // src/toy-spawner.js
 // Provides the "Create Toy" palette dock and drag-to-spawn affordance.
 import { openAdvancedLogic, logicCreationEntry } from './logic-creation-menu.js';
@@ -51,6 +52,8 @@ const state = {
   trashHelpTimer: null,
   trashHint: null,
   creationButtons: [],
+  shapeButtons: [],
+  lastShapeType: 'cube',
 };
 
 const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
@@ -293,6 +296,13 @@ function ensureDock() {
     if (!available) button.remove();
   }
   document.body.appendChild(dock);
+  window.addEventListener('keydown',event=>{
+    if(event.key!=='Escape')return;
+    closeShapePalette();
+    if(uiMode.isSimple())document.dispatchEvent(new CustomEvent('simple-creation:cancel'));
+  },true);
+  const syncVisibility=()=>menu.classList.toggle('previews-paused',document.hidden);
+  document.addEventListener('visibilitychange',syncVisibility);syncVisibility();
 
   state.dock = dock;
   state.toggle = toggle;
@@ -308,7 +318,7 @@ function ensureDock() {
       caption.textContent = label;
     }
     if (uiMode.isSimple() && !['music','art'].includes(state.activePalette)) setActivePalette('music');
-    if (state.open) renderCatalog();
+    renderCatalog();
   };
   syncMode(); uiMode.subscribe(syncMode);
   state.menu = menu;
@@ -378,6 +388,9 @@ function ensureDock() {
 function setMenuOpen(open) {
   ensureDock();
   state.open = !!open;
+  if(!state.open&&uiMode.isSimple()&&state.activePalette!=='music'){
+    setActivePalette('music');renderCatalog();
+  }
   state.menu?.classList.toggle('open', state.open);
   state.dock?.classList.toggle('open', state.open);
   if (state.open) {
@@ -396,13 +409,23 @@ function renderCatalog() {
   state.listHost.innerHTML = '';
   state.creationButtons=[];
   const grouped=uiMode.isSimple()&&state.activePalette==='music',hosts=new Map();
+  state.menu?.setAttribute('role',grouped?'region':'menu');
+  state.menu?.setAttribute('aria-label',grouped?'Simple Toy Box':'Create toy');
   state.menu?.classList.toggle('simple-music-grouped',grouped);
   state.listHost.classList.toggle('is-simple-grouped',grouped);
+  state.menu?.querySelector('.toy-box-header')?.remove();
+  state.menu?.querySelector('.shape-palette')?.remove();
+  state.shapeButtons=[];
+  if(grouped){
+    const header=document.createElement('button');header.type='button';header.className='toy-box-header';
+    header.textContent='♫  TOYS';header.setAttribute('aria-expanded',String(!state.menu.classList.contains('toy-box-collapsed')));
+    header.addEventListener('click',()=>{const collapsed=state.menu.classList.toggle('toy-box-collapsed');header.setAttribute('aria-expanded',String(!collapsed));closeShapePalette();});
+    state.menu.prepend(header);
+  }
   if(grouped)for(const group of simpleCreationGroups(catalog)){
     const section=document.createElement('section');section.className='simple-creation-group';section.dataset.simpleCategory=group.id;section.setAttribute('role','group');
     const heading=document.createElement('h3');heading.id=`simple-creation-${group.id}`;heading.textContent=group.label;section.setAttribute('aria-labelledby',heading.id);section.append(heading);
     const contents=document.createElement('div');contents.className='simple-creation-items';section.append(contents);hosts.set(group.id,contents);
-    if(!group.entries.length){const empty=document.createElement('p');empty.className='simple-creation-empty';empty.textContent='Coming later';contents.append(empty);}
     state.listHost.append(section);
   }
   if(state.activePalette==='logic'){const title=document.createElement('strong');title.className='logic-palette-title';title.textContent='STRUCTURE';state.listHost.append(title);}
@@ -424,6 +447,16 @@ function renderCatalog() {
     const isBouncerMode=['physical-ball','physical-gravity-ball','physical-cube'].includes(entry.type);
     if(isBouncerMode){decorateCircularControl(card,{label:entry.name,icon:entry.type==='physical-cube'?'cube':'throw'});card.classList.add('bouncer-mode-button');if(entry.type==='physical-gravity-ball')card.classList.add('gravity-ball-tool');card.append(nameEl);}else card.append(nameEl,descEl);
     if(grouped){card.setAttribute('aria-label',entry.name);card.title=entry.description||entry.name;state.creationButtons.push({card,entry});}
+    if(grouped){
+      card.className='toy-spawner-item toy-box-item';
+      card.innerHTML=toyPreview(entry.type);
+      if(entry.type==='physical-cube'){
+        card.innerHTML='';const preview=document.createElement('span');preview.className='shape-tool-preview';preview.innerHTML=toyPreview('shape:'+state.lastShapeType);card.append(preview);
+      }
+      nameEl.textContent=entry.type==='physical-cube'?'Shape':entry.name;
+      card.setAttribute('aria-label',nameEl.textContent);card.append(nameEl);
+      if(entry.type==='physical-cube'){card.setAttribute('aria-haspopup','true');card.setAttribute('aria-expanded','false');}
+    }
 
     const isDisabled = !!entry.disabled;
     const isActionOnly = typeof entry.action === 'function';
@@ -443,6 +476,17 @@ function renderCatalog() {
           return;
         }
         event.preventDefault();
+        if(grouped){
+          if(entry.type==='physical-cube'){
+            if(state.menu.querySelector('.shape-palette'))closeShapePalette();else openShapePalette(card,catalog);
+            syncCreationModeUI();return;
+          }
+          document.dispatchEvent(new CustomEvent('simple-toy-box:choose'));
+          closeShapePalette();
+          if(entry.isCreationActive?.()){
+            document.dispatchEvent(new CustomEvent('simple-creation:cancel'));syncCreationModeUI();return;
+          }
+        }
         const created = isActionOnly ? invokeEntryAction(entry) : spawnAtDefault(entry);
         syncCreationModeUI();
         state.justSpawned = false;
@@ -454,8 +498,42 @@ function renderCatalog() {
   syncCreationModeUI();
 }
 
+function activateCreationEntry(entry,options){
+  return typeof entry.action==='function'?invokeEntryAction(entry):spawnAtDefault(entry,options);
+}
+
+function closeShapePalette(){
+ state.menu?.querySelector('.shape-palette')?.remove();state.shapeButtons=[];
+ for(const {card,entry}of state.creationButtons)if(entry.type==='physical-cube')card.setAttribute('aria-expanded','false');
+}
+function openShapePalette(anchor,catalog){
+  const panel=document.createElement('section');panel.className='shape-palette';panel.setAttribute('aria-label','Shapes');
+  const title=document.createElement('h3');title.textContent='SHAPES';panel.append(title);
+  const grid=document.createElement('div');grid.className='shape-choices';panel.append(grid);
+  const entry=catalog.find(item=>item.type==='physical-cube');if(!entry||!canCreateToy(entry.type))return;
+  for(const shape of simpleShapes){
+    if(!canCreateShape(shape.id))continue;
+    const button=document.createElement('button');button.type='button';button.className='toy-box-item shape-choice';button.dataset.shapeType=shape.id;
+    button.innerHTML=toyPreview(shape.preview);const label=document.createElement('span');label.textContent=shape.label;button.append(label);
+    button.addEventListener('click',()=>{
+      document.dispatchEvent(new CustomEvent('simple-toy-box:choose'));
+      if(entry.isCreationActive?.()&&entry.activeShapeType?.()===shape.id)document.dispatchEvent(new CustomEvent('simple-creation:cancel'));
+      else activateCreationEntry(entry,{shapeType:shape.id});
+      syncCreationModeUI();
+    });grid.append(button);state.shapeButtons.push({button,shape,entry});
+  }
+  anchor.setAttribute('aria-expanded','true');state.menu.append(panel);syncCreationModeUI();
+  document.dispatchEvent(new CustomEvent('simple-shape-palette:open'));
+  const selected=state.shapeButtons.find(({button})=>button.getAttribute('aria-pressed')==='true');
+  (selected?.button||panel.querySelector('button'))?.focus();
+}
+
 function syncCreationModeUI(){
   for(const {card,entry}of state.creationButtons){const active=!!entry.isCreationActive?.();card.classList.toggle('is-active',active);card.setAttribute('aria-pressed',String(active));}
+  for(const {button,shape,entry}of state.shapeButtons){const active=!!entry.isCreationActive?.()&&entry.activeShapeType?.()===shape.id;button.setAttribute('aria-pressed',String(active));}
+  const tool=state.creationButtons.find(({entry})=>entry.type==='physical-cube');
+  const shapeType=tool?.entry.activeShapeType?.();
+  if(shapeType&&shapeType!==state.lastShapeType){state.lastShapeType=shapeType;const preview=tool.card.querySelector('.shape-tool-preview');if(preview)preview.innerHTML=toyPreview('shape:'+shapeType);}
 }
 
 function openAdvancedPalette() {
@@ -553,7 +631,7 @@ function onPointerUp(event) {
   if (dropped && !uiMode.isSimple()) setMenuOpen(false);
 }
 
-function spawnAtDefault(entry) {
+function spawnAtDefault(entry,creationOptions={}) {
   const metrics = getBoardMetrics();
   if (!metrics) return false;
   const container = metrics.board.closest?.('.board-viewport') || document.documentElement;
@@ -578,6 +656,7 @@ function spawnAtDefault(entry) {
     const artOwnerId = internalActive ? window.__mtInternalBoard?.getActiveArtToyId?.() : null;
     dbg('spawnAtDefault', state.activePalette, entry.type, { x: worldCenterX, y: worldCenterY, internalActive, artOwnerId });
     const panel = state.config.create?.(entry.type, {
+      ...creationOptions,
       centerX: worldCenterX,
       centerY: worldCenterY,
       autoCenter: true,
@@ -840,7 +919,13 @@ function configure(options) {
   });
   if (state.activePalette === 'music') {
     state.config = state.configMusic;
-    if (state.open) renderCatalog();
+    // Main registers its catalog before initializing the board controllers.
+    // Read active-mode getters once that synchronous initialization is complete.
+    queueMicrotask(()=>{
+      const entries=simpleCreationGroups(safeCatalog()).flatMap(group=>group.entries);
+      if(uiMode.isSimple()&&state.menu?.classList.contains('simple-music-grouped')&&entries.length===state.creationButtons.length&&entries.every((entry,i)=>entry.type===state.creationButtons[i].entry.type&&entry.disabled===state.creationButtons[i].entry.disabled))syncCreationModeUI();
+      else renderCatalog();
+    });
   }
 }
 

@@ -1,0 +1,79 @@
+<!doctype html><meta charset="utf-8"><title>Running surface audit</title>
+<style>body{margin:0;background:#0b111b;color:#deebff;font:13px system-ui}pre{white-space:pre-wrap}canvas{border:1px solid #334255}</style>
+<pre id="result">Running real GPU reconstruction / wake / domain assertions…</pre><canvas id="field" width="720" height="500"></canvas>
+<script type="module">
+import {createGPUFluid} from '../src/simple-paint/presentation/fluid/gpu-fluid.js';
+import {HIGH_FLUID} from '../src/simple-paint/presentation/fluid/fluid-config.js';
+import {gestures} from '../experiments/simple-paint-fluid/gestures.js';
+const canvas=document.querySelector('#field'),out=document.querySelector('#result'),checks={},metrics={};let engine;
+window.surfaceAudit={checks,metrics}; // Read-only evidence for the saved before/after runner.
+const test=(name,value)=>{checks[name]=!!value;out.textContent='Running: '+name+' ? '+!!value;};
+const yieldUI=()=>new Promise(r=>setTimeout(r,0));
+try{
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false});if(!gl)throw Error('WebGL2 unavailable');
+ engine=createGPUFluid(gl);const g=engine.grid;
+ function render(transform={x:360,y:250,scale:1},debugView=0){engine.render({width:720,height:500,transform,colour:[.1,.65,1],cursor:{x:-100,y:-100},drawing:false,debugView});const p=new Uint8Array(720*500*4);gl.readPixels(0,0,720,500,gl.RGBA,gl.UNSIGNED_BYTE,p);return p;}
+ function summarize(){const data=engine.debugRead();let height=0,memory=0,peakHeight=0,peakMemory=0,aligned=0;for(let k=0;k<data.length;k+=4){const h=Math.abs(data[k+2]),m=data[k+1];height+=h;memory+=m;peakHeight=Math.max(peakHeight,h);peakMemory=Math.max(peakMemory,m);if(h>.15&&m>.015)aligned++;}const pixels=render();let visible=0,alpha=0;for(let k=3;k<pixels.length;k+=4){if(pixels[k]>=3)visible++;alpha+=pixels[k];}return {height,memory,peakHeight,peakMemory,aligned,visible,alpha};}
+ function readAt(data,p){const o=engine.state.origin,x=Math.floor((p.x-o.x)/g.cellSize),y=Math.floor((p.y-o.y)/g.cellSize);return data[(x+y*g.width)*4+2];}
+ async function draw(name){const gesture=gestures[name];engine.reset(gesture.point(0));const n=Math.ceil(gesture.duration/(1000/30));for(let i=1;i<=n;i++){engine.step(gesture.duration/n/1000,gesture.point(gesture.duration*i/n),true);if(i%8===0)await yieldUI();}return gesture.point(gesture.duration);}
+ const pointer=await draw('longCurve'),ages=[0,.5,1,2,4],samples=[];let age=0;
+ for(const target of ages){while(age<target-.0001){const dt=Math.min(1/30,target-age);engine.step(dt,pointer,false);age+=dt;if(Math.round(age*30)%8===0)await yieldUI();}samples.push({age:target,...summarize()});}
+ metrics.recovery=samples;
+ test('wake memory retained at 0.5 / 1 / 2 seconds',samples.slice(1,4).every(s=>s.peakMemory>.025));
+ test('physical height and visible wake survive two seconds',samples[3].peakHeight>.2&&samples[3].visible>150);
+ test('memory decays progressively',samples.every((s,i)=>!i||s.memory<samples[i-1].memory));
+ test('physical height relaxes progressively',samples.every((s,i)=>!i||s.height<samples[i-1].height));
+ test('rendered wake weakens as geometry flattens',samples[3].alpha>samples[4].alpha*2&&samples[1].alpha>samples[3].alpha);
+ // Conservation spreads displaced volume rather than deleting its integral.
+ test('four-second channel levels toward restDepth',samples[4].peakHeight<HIGH_FLUID.restDepth*.08&&samples[4].alpha<samples[0].alpha*.15);
+ test('height and memory remain spatially aligned',samples.slice(0,4).every(s=>s.aligned>25));
+ metrics.pathContinuity={};
+ for(const name of ['longStraight','vertical','diagonal','shallow','tightCurve']){
+  await draw(name);const data=engine.debugRead(),gesture=gestures[name];let present=0,n=0;
+  // Exclude the very oldest beginning and the current contact; inspect channel center.
+  for(let u=.3;u<.94;u+=.025){n++;if(readAt(data,gesture.point(gesture.duration*u))<-.08)present++;}
+  metrics.pathContinuity[name]=present/n;test(name+' swept channel is continuous',present/n>.85);
+ }
+ // Sparse fast events must still make a single unbroken swept groove.
+ engine.reset({x:-220,y:0});engine.step(1/30,{x:220,y:0},true);const swept=engine.debugRead();let connected=0;
+ for(let x=-190;x<220;x+=8)if(readAt(swept,{x,y:0})<-.02)connected++;
+ test('large fast input sweeps without isolated stamps',connected>48);
+ // Circular contact under rotation/translation of the simulation lattice.
+ const rotations=[];
+ for(const angle of [0,Math.PI/4,Math.PI/2]){const axis={x:Math.cos(angle),y:Math.sin(angle)};engine.reset({x:0,y:0});for(let i=1;i<=20;i++)engine.step(1/60,{x:axis.x*i*2,y:axis.y*i*2},true);const data=engine.debugRead();let total=0;for(let i=2;i<data.length;i+=4)total+=Math.abs(data[i]);rotations.push(total);}
+ metrics.rotatedHeightMass=rotations;test('radial contact independent of grid orientation',Math.max(...rotations)/Math.min(...rotations)<1.18);
+ // A uniform displaced field reaches every domain edge: verify it cannot draw
+ // a hard rectangle. The test does not depend on a typical short gesture.
+ engine.reset({x:0,y:0});const uniform=new Float32Array(g.width*g.height*4);for(let k=0;k<uniform.length;k+=4){uniform[k]=1;uniform[k+1]=.6;uniform[k+2]=4;}
+ engine.debugWriteMaterial(uniform);const o=engine.state.origin;
+ const edgePixels=render({x:80-o.x,y:250-(o.y+g.worldHeight/2),scale:1});
+ const alphaAt=x=>edgePixels[(250*720+x)*4+3];
+ metrics.domainAlpha=[alphaAt(79),alphaAt(80),alphaAt(84),alphaAt(96),alphaAt(140),alphaAt(208)];
+ test('domain edge is invisible with fully disturbed edge cells',alphaAt(79)===0&&alphaAt(80)===0&&alphaAt(84)<3);
+ test('domain influence rolls in gradually',alphaAt(96)<alphaAt(140)&&alphaAt(140)>0);
+ const edgeCases=[
+  ['left',{x:80-o.x,y:250-(o.y+g.worldHeight/2)},80,250],
+  ['right',{x:640-(o.x+g.worldWidth),y:250-(o.y+g.worldHeight/2)},640,250],
+  ['top',{x:360-(o.x+g.worldWidth/2),y:80-o.y},360,80],
+  ['bottom',{x:360-(o.x+g.worldWidth/2),y:420-(o.y+g.worldHeight)},360,420]
+ ];
+ for(const [label,translation,x,y] of edgeCases){const pixels=render({...translation,scale:1});const a=pixels[((499-y)*720+x)*4+3];test(label+' domain boundary has zero visible seam',a<=1);}
+ // Memory without height is not permitted to reveal a flat fog/paint mask.
+ for(let k=2;k<uniform.length;k+=4)uniform[k]=0;engine.debugWriteMaterial(uniform);
+ const flat=render();test('flat remembered liquid remains transparent',flat.every((v,i)=>i%4!==3||v===0));
+ await draw('diagonal');const normals=render(undefined,5);let biggestStep=0;
+ for(let y=2;y<498;y++)for(let x=2;x<718;x++){const k=(x+y*720)*4;for(let c=0;c<3;c++)biggestStep=Math.max(biggestStep,Math.abs(normals[k+c]-normals[k+c+4]),Math.abs(normals[k+c]-normals[k+c+720*4]));}
+ metrics.maxNormalPixelStep=biggestStep;
+ const subpixel=render({x:360.02,y:250.02,scale:1},5);let subpixelStep=0;
+ for(let i=0;i<normals.length;i++)if(i%4!==3)subpixelStep=Math.max(subpixelStep,Math.abs(normals[i]-subpixel[i]));
+ metrics.subpixelNormalStep=subpixelStep;test('reconstructed normals have no cell-boundary jumps',subpixelStep<=3);
+ const white=document.createElement('canvas');white.width=720;white.height=500;const context=white.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,720,500);
+ engine.render({width:720,height:500,transform:{x:360,y:250,scale:1},colour:[.1,.65,1],cursor:{x:-100,y:-100},drawing:false,background:white});
+ const transparentPixels=new Uint8Array(720*500*4);gl.readPixels(0,0,720,500,gl.RGBA,gl.UNSIGNED_BYTE,transparentPixels);
+ test('clear surface uses valid premultiplied colours over light art',transparentPixels.every((v,i)=>i%4===3||v<=transparentPixels[i-i%4+3]+1));
+ const last=gestures.diagonal.point(gestures.diagonal.duration);for(let i=0;i<420;i++){engine.step(1/30,last,false);if(i%8===0)await yieldUI();}
+ const quiet=engine.activity();metrics.quiet=quiet;test('field becomes quiet for automatic cleanup',quiet.disturbance<.012&&quiet.speed<3);
+ test('no WebGL errors',gl.getError()===gl.NO_ERROR);
+ const pass=Object.values(checks).every(Boolean);out.textContent=(pass?'PASS':'FAIL')+' '+JSON.stringify({checks,metrics},null,2);document.title=(pass?'PASS':'FAIL')+' surface audit';engine.destroy();
+}catch(error){engine?.destroy();out.textContent='FAIL '+error.stack;document.title='FAIL surface audit';}
+</script>

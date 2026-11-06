@@ -1,0 +1,80 @@
+<!doctype html><meta charset="utf-8"><title>GPU fluid assertions</title>
+<style>body{margin:0;background:#09111c;color:#e2ecff;font:14px system-ui}pre{position:relative;z-index:2;padding:18px;white-space:pre-wrap;background:#0b1525dd}canvas{position:fixed;inset:0;pointer-events:none}</style>
+<pre id="result">Running real GPU fluid assertions…</pre><canvas id="field"></canvas>
+<script type="module">
+import {createGPUFluid} from '../src/simple-paint/presentation/fluid/gpu-fluid.js';
+import {HIGH_FLUID} from '../src/simple-paint/presentation/fluid/fluid-config.js';
+const out=document.querySelector('#result'),canvas=document.querySelector('#field');let engine;
+const checks={},metrics={};
+const test=(name,value)=>{checks[name]=!!value;};
+const pause=()=>Promise.resolve();
+function stats(data,origin,grid){
+ let sum=0,x=0,y=0,peak=0;
+ for(let j=0;j<grid.height;j++)for(let i=0;i<grid.width;i++){const e=data[(i+j*grid.width)*4+1];sum+=e;x+=(origin.x+(i+.5)*grid.cellSize)*e;y+=(origin.y+(j+.5)*grid.cellSize)*e;peak=Math.max(peak,e);}
+ return {sum,x:x/Math.max(sum,.00001),y:y/Math.max(sum,.00001),peak};
+}
+function meanAt(data,point,radius=16){const g=engine.grid,o=engine.state.origin;let sum=0,n=0;for(let y=0;y<g.height;y++)for(let x=0;x<g.width;x++){if(Math.hypot(o.x+(x+.5)*g.cellSize-point.x,o.y+(y+.5)*g.cellSize-point.y)<radius){sum+=data[(x+y*g.width)*4];n++;}}return sum/Math.max(n,1);}
+function bounds(pixels,w,h){let left=w,right=0,top=h,bottom=0;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(pixels[(x+y*w)*4+3]>4){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}return {width:right-left,height:bottom-top};}
+try{
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false});if(!gl)throw Error('WebGL2 unavailable');engine=createGPUFluid(gl);engine.reset({x:-160,y:0});
+ const g=engine.grid;test('GPU grid has no particle state',engine.state.backend==='gpu-field'&&!('particles' in engine.state));
+ engine.step(1/60,{x:-160,y:0},true);let m=engine.debugRead();
+ test('stationary contact displaces liquid without movement',stats(m,engine.state.origin,g).peak>0);test('finger pushes liquid thickness toward base',meanAt(m,{x:-160,y:0})<.8);
+ let pointer={x:-160,y:0};
+ for(let i=1;i<=60;i++){pointer={x:-160+i*6,y:0};engine.step(1/60,pointer,true);if(i%20===0)await pause();}
+ const before=engine.debugRead(),beforeStats=stats(before,engine.state.origin,g),v=engine.debugRead('velocity'),raw=engine.debugRead('divergence');
+ test('moving contact creates a retained disturbance',beforeStats.peak>.1&&beforeStats.x<pointer.x-40);
+ let pre=0,post=0,n=0;
+ for(let y=1;y<g.height-1;y++)for(let x=1;x<g.width-1;x++){
+  const world={x:engine.state.origin.x+(x+.5)*g.cellSize,y:engine.state.origin.y+(y+.5)*g.cellSize};if(Math.hypot(world.x-pointer.x,world.y-pointer.y)<HIGH_FLUID.radiusWorld+g.cellSize*2)continue;
+  const k=(x+y*g.width)*4,div=(v[k+4]-v[k-4]+v[k+g.width*4+1]-v[k-g.width*4+1])/(2*g.cellSize);pre+=raw[k]**2;post+=div**2;n++;
+ }
+ metrics.divergenceBefore=Math.sqrt(pre/n);metrics.divergenceAfter=Math.sqrt(post/n);test('pressure projection reduces divergence',post<pre*.98);
+ // Signed-height checks inspect real GPU output, independently of opacity.
+ const heightAt=(data,point,r=14)=>{const o=engine.state.origin;let sum=0,n=0;for(let y=0;y<g.height;y++)for(let x=0;x<g.width;x++){if(Math.hypot(o.x+(x+.5)*g.cellSize-point.x,o.y+(y+.5)*g.cellSize-point.y)<r){sum+=data[(x+y*g.width)*4+2];n++;}}return sum/Math.max(n,1);};
+ const radius=HIGH_FLUID.radiusWorld;
+ metrics.height={groove:heightAt(before,{x:pointer.x-radius*.5,y:0}),bow:heightAt(before,{x:pointer.x+radius*1.25,y:0}),side:heightAt(before,{x:pointer.x-radius*.3,y:radius*1.25})};
+ test('signed height forms groove, bow wave and side ridge',metrics.height.groove<-.1&&metrics.height.bow>.1&&metrics.height.side>.1);
+ const heightPeak=data=>data.reduce((peak,v,i)=>i%4===2?Math.max(peak,Math.abs(v)):peak,0);
+ const peakBefore=heightPeak(before);
+ const holeBefore=meanAt(before,pointer);
+ for(let i=0;i<30;i++){engine.step(1/60,pointer,false);if(i%15===0)await pause();}
+ const after=engine.debugRead(),afterStats=stats(after,engine.state.origin,g);metrics.holeBefore=holeBefore;metrics.holeAfter=meanAt(after,pointer);
+ metrics.advectedDistance=Math.hypot(afterStats.x-beforeStats.x,afterStats.y-beforeStats.y);
+ test('disturbance advects through the GPU velocity field',metrics.advectedDistance>.5);
+ test('disturbance decays without a CPU particle timer',afterStats.sum<beforeStats.sum&&afterStats.sum>beforeStats.sum*.25);
+ test('density flows/diffuses back into the channel',metrics.holeAfter>holeBefore+.025);
+ test('height relaxes toward flat after release',heightPeak(after)<peakBefore);
+ // Retained geometry must survive beyond the old short wake, then settle.
+ const settledStart=heightPeak(after);
+ for(let i=0;i<90;i++)engine.step(1/60,pointer,false);
+ const retained=heightPeak(engine.debugRead());
+ metrics.heightAfterTwoSeconds=retained;
+ test('long wake retains height after two seconds',retained>.3&&retained<settledStart);
+ const activity=engine.activity();test('GPU activity reduction matches material peak',Math.abs(activity.disturbance-Math.max(stats(engine.debugRead(),engine.state.origin,g).peak,heightPeak(engine.debugRead())/HIGH_FLUID.restDepth))<.01);
+ const preScrollStats=stats(engine.debugRead(),engine.state.origin,g);
+ const frozen=engine.debugRead(),o={...engine.state.origin},sizes=[];
+ canvas.width=1024;canvas.height=512;
+ for(const scale of [.5,1,2]){
+  engine.render({width:1024,height:512,dpr:1,transform:{x:512-afterStats.x*scale,y:256-afterStats.y*scale,scale},colour:[.15,.65,1],cursor:{x:-100,y:-100},drawing:false});
+  const pixels=new Uint8Array(1024*512*4);gl.readPixels(0,0,1024,512,gl.RGBA,gl.UNSIGNED_BYTE,pixels);sizes.push(bounds(pixels,1024,512));
+ }
+ const unchanged=engine.debugRead();test('camera renders do not mutate simulation',unchanged.every((v,i)=>v===frozen[i])&&engine.state.origin.x===o.x&&engine.state.origin.y===o.y);
+ metrics.zoomBounds=sizes;test('visible field scales with board zoom',sizes[1].width>sizes[0].width*1.7&&sizes[2].width>sizes[1].width*1.7);
+ const originBefore={...engine.state.origin};engine.step(1/60,{x:1000,y:0},false);
+ test('world domain scroll preserves existing disturbance',engine.state.origin.x!==originBefore.x&&stats(engine.debugRead(),engine.state.origin,g).sum>preScrollStats.sum*.45);
+ test('no WebGL errors',gl.getError()===gl.NO_ERROR);
+ const peaks=[];
+ for(const speed of [12,280]){
+  engine.reset({x:0,y:0});
+  for(let i=1;i<=90;i++)engine.step(1/60,{x:i*speed/60,y:0},true);
+  peaks.push(heightPeak(engine.debugRead()));
+ }
+ metrics.speedHeightPeaks=peaks;
+ test('slow contact deforms and fast contact increases front height',peaks[0]>.2&&peaks[1]>peaks[0]);
+ metrics.textureBytes=engine.state.textureBytes;const passed=Object.values(checks).every(Boolean);
+ out.textContent=(passed?'PASS':'FAIL')+' '+JSON.stringify({checks,metrics},null,2);document.title=(passed?'PASS':'FAIL')+' · GPU fluid assertions';
+ engine.destroy();
+}catch(error){engine?.destroy();out.textContent='FAIL '+error.stack;document.title='FAIL · GPU fluid assertions';}
+</script>
+

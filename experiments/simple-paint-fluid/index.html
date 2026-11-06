@@ -1,0 +1,57 @@
+<!doctype html><meta charset="utf-8"><title>Experimental High liquid comparison</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#0b111b;color:#e9f0ff;font:14px system-ui;display:flex;flex-direction:column;height:100vh}header{padding:12px;background:#141e2e}button,select{font:inherit;padding:6px 9px;margin:3px;background:#263650;border:1px solid #647896;border-radius:6px;color:inherit}button:disabled{opacity:.4}main{display:flex;flex:1;min-height:0}iframe{width:50%;height:100%;border:0;border-right:1px solid #33435a}p{margin:6px 0;color:#adbbcc}#status{margin-left:10px}</style>
+<header><strong>Simple Paint - particle prototype / experimental GPU liquid | identical world inputs</strong><br>
+<button data-case="press">Press / Hold</button><button data-case="slow">Slow</button><button data-case="fast">Fast</button><button data-case="turn">Sharp Turn</button><button data-case="loop">Loop</button><button data-case="reverse">Reversal</button>
+<button data-case="longStraight">Long Straight</button><button data-case="longCurve">Long Curve</button><button data-case="diagonal">Diagonal 45 deg</button><button data-case="shallow">Shallow Diagonal</button><button data-case="vertical">Vertical</button><button data-case="slowLong">Slow Long Stroke</button><button data-case="tightCurve">Tight Curve</button><br>
+<button id="release">Release</button><button id="freeze">Freeze / resume</button><button id="advance">Advance 0.5s</button><button id="clear">Clear</button>
+<select id="zoom" aria-label="Zoom"><option value="1">100%</option><option value=".5">50%</option><option value="2">200%</option></select><button id="pan">Pan +40px</button>
+<select id="instrument" aria-label="Instrument"><option>PIANO</option><option>BELL</option><option>KALIMBA</option></select>
+<label>Background: <select id="background" aria-label="Background"><option value="dark">Dark</option><option value="grid" selected>Grid</option><option value="art">Colour Art</option></select></label>
+<select id="debug" aria-label="GPU diagnostics"><option value="0">FINAL</option><option value="9">LIQUID DEPTH</option><option value="1">HEIGHT</option><option value="2">MEMORY</option><option value="3">Velocity magnitude</option><option value="4">Domain falloff</option><option value="5">NORMALS</option><option value="6">REFRACTION ONLY</option><option value="7">EDGE / SPECULAR ONLY</option><option value="8">FINAL WITHOUT TINT</option></select><br>
+Freeze after complete gesture: <button id="hold-snapshot">Press / Hold at 2s</button><button data-after="0">Release</button><button data-after="500">+0.5s</button><button data-after="1000">+1s</button><button data-after="2000">+2s</button><button data-after="4000">+4s</button><button data-after="6000">+6s</button><span id="status">Loading renderers...</span>
+<p>Snapshot buttons replay the selected gesture with fixed steps, then freeze at its release age. Both panels acknowledge each step. Diagnostics are development-only. <a style="color:#9acbff" href="benchmark.html">GPU benchmark</a></p></header>
+<main><iframe title="High particle prototype" src="../simple-paint-webgl/panel.html?quality=high&highBackend=particles"></iframe><iframe title="High GPU liquid" src="../simple-paint-webgl/panel.html?quality=high"></iframe></main>
+<script type="module">
+import {gestures} from './gestures.js';
+const panels=[...document.querySelectorAll('iframe')],ready=new Set(),pending=new Map();
+let scenario='longCurve',clock=0,last=0,released=false,zoom=1,pan=0,frozen=true,busy=false,serial=0,lastProofs=[],snapshotState=null,backgroundMode='grid';
+const status=document.querySelector('#status');
+function send(m){for(const p of panels)p.contentWindow.postMessage(m,location.origin);}
+window.addEventListener('message',e=>{if(e.origin!==location.origin||!panels.some(p=>p.contentWindow===e.source))return;if(e.data.ready){ready.add(e.source);status.textContent=ready.size===2?'Ready - choose a gesture':'Loading...';}const task=pending.get(e.data.qaFrame);if(task){task.seen.set(e.source,e.data.proof);if(task.seen.size===2){clearTimeout(task.timeout);pending.delete(e.data.qaFrame);lastProofs=panels.map(p=>task.seen.get(p.contentWindow));task.resolve();}}});
+function tickAck(){return new Promise((resolve,reject)=>{const key=++serial;const timeout=setTimeout(()=>{pending.delete(key);reject(Error('Renderer acknowledgement timed out'));},30000);pending.set(key,{resolve,reject,seen:new Map(),timeout});send({event:'tick',time:clock,fps:0,qaFrame:key});});}
+function point(t){return gestures[scenario].point(Math.min(t,gestures[scenario].duration));}
+function begin(){snapshotState=null;clock=0;released=false;send({event:'begin',point:point(0),time:clock,zoom,pan,instrument:document.querySelector('#instrument').value});}
+async function advance(elapsed){clock+=elapsed;if(!released)send({event:'move',point:point(clock),time:clock});await tickAck();}
+for(const b of document.querySelectorAll('[data-case]'))b.onclick=()=>{if(ready.size<2||busy)return;scenario=b.dataset.case;begin();frozen=false;last=0;status.textContent=b.textContent;};
+document.querySelector('#release').onclick=()=>{released=true;send({event:'release',time:clock});};
+document.querySelector('#freeze').onclick=()=>frozen=!frozen;
+document.querySelector('#clear').onclick=()=>{frozen=true;send({event:'stop',time:clock});};
+document.querySelector('#zoom').onchange=e=>{zoom=Number(e.target.value);send({event:'transform',zoom,pan});};
+document.querySelector('#pan').onclick=()=>{pan=pan?0:40;send({event:'transform',zoom,pan});};
+document.querySelector('#instrument').onchange=e=>send({event:'instrument',instrument:e.target.value});
+document.querySelector('#background').onchange=e=>{backgroundMode=e.target.value;send({event:'transform',background:backgroundMode,zoom,pan});};
+document.querySelector('#debug').onchange=e=>send({event:'transform',debugView:Number(e.target.value),zoom,pan});
+document.querySelector('#advance').onclick=async()=>{if(busy)return;frozen=true;busy=true;try{for(let i=0;i<15;i++)await advance(1000/30);}finally{busy=false;}};
+async function snapshot({name=scenario,after=0,scale=zoom,debug=0,hold=false,reference,background=reference===undefined?backgroundMode:(reference?'grid':'dark')}={}){
+ if(ready.size<2||busy)throw Error('Comparison not ready');busy=true;frozen=true;
+ for(const b of document.querySelectorAll('button'))b.disabled=true;
+ try{
+  scenario=name;zoom=scale;document.querySelector('#zoom').value=scale===.5?'.5':String(scale);
+  document.querySelector('#debug').value=String(debug);document.querySelector('#background').value=background;backgroundMode=background;
+  const duration=gestures[scenario].duration;
+  const reuse=snapshotState&&snapshotState.name===name&&snapshotState.scale===scale&&snapshotState.debug===debug&&snapshotState.hold===hold&&after>=snapshotState.after;
+  send({event:'transform',zoom,pan,debugView:debug,background});if(!reuse)begin();
+  while(clock<duration-.001){await advance(Math.min(1000/30,duration-clock));status.textContent='Replaying '+name+'...';}
+  if(!reuse&&!hold){released=true;send({event:'release',time:clock});await tickAck();}
+  const until=duration+after;while(clock<until-.001)await advance(Math.min(1000/30,until-clock));
+  await tickAck();
+  snapshotState={name,after,scale,debug,hold};
+  status.textContent=name+' | '+(hold?'holding':'release +'+after/1000+'s')+' | '+scale+'x | '+background+' | frozen';
+  return {name,after,scale,background,hold,clock,proofs:lastProofs};
+ }finally{busy=false;for(const b of document.querySelectorAll('button'))b.disabled=false;}
+}
+for(const b of document.querySelectorAll('[data-after]'))b.onclick=()=>snapshot({after:Number(b.dataset.after),debug:Number(document.querySelector('#debug').value)}).catch(e=>status.textContent=e.message);
+document.querySelector('#hold-snapshot').onclick=()=>snapshot({name:'press',hold:true,debug:Number(document.querySelector('#debug').value)}).catch(e=>status.textContent=e.message);
+window.paintComparisonQA={snapshot,ready:()=>ready.size===2};
+async function frame(now){if(!frozen&&!busy){busy=true;try{await advance(last?Math.min(33,now-last):16.667);}finally{busy=false;}}last=now;requestAnimationFrame(frame);}requestAnimationFrame(frame);
+</script>

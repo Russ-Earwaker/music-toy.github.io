@@ -37,6 +37,7 @@ body.bouncer-board-armed .board-viewport { cursor:crosshair; }
 
 /* Match classic Bouncer drawBlock's square orange button and white hit pop. */
 .physical-cube { border:1px solid #ffffff80; border-radius:0; background:var(--cube-color,#ff8c00); box-shadow:inset 0 2px #ffffff40,inset 0 -2px #0003; }
+.physical-cube[data-shape-type="circle"]{border-radius:50%}
 .physical-cube::before { content:''; position:absolute; inset:2px 2px auto; height:35%; background:#ffffff1f; pointer-events:none; }
 .physical-cube::after { content:''; position:absolute; inset:0; width:auto; height:auto; border-radius:0; background:#fff; opacity:var(--cube-flash,0); pointer-events:none; }
 .physical-path-prediction { fill:none; stroke:#a0edff88; stroke-width:2; stroke-dasharray:8 6; stroke-linejoin:round; vector-effect:non-scaling-stroke; }

@@ -1,0 +1,84 @@
+{
+  "checks": {
+    "wake memory retained at 0.5 / 1 / 2 seconds": true,
+    "physical height and visible wake survive two seconds": true,
+    "memory decays progressively": true,
+    "physical height relaxes progressively": true,
+    "rendered wake weakens as geometry flattens": true,
+    "four-second wake mostly recovered": false,
+    "height and memory remain spatially aligned": true,
+    "longStraight swept channel is continuous": true,
+    "vertical swept channel is continuous": true,
+    "diagonal swept channel is continuous": false,
+    "shallow swept channel is continuous": false,
+    "tightCurve swept channel is continuous": false,
+    "large fast input sweeps without isolated stamps": true,
+    "radial contact independent of grid orientation": true
+  },
+  "metrics": {
+    "recovery": [
+      {
+        "age": 0,
+        "height": 1529.5632782578468,
+        "memory": 154.78333789110184,
+        "peakHeight": 8.515625,
+        "peakMemory": 0.70947265625,
+        "aligned": 1487,
+        "visible": 20052,
+        "alpha": 270868
+      },
+      {
+        "age": 0.5,
+        "height": 1045.3664467930794,
+        "memory": 114.14503818750381,
+        "peakHeight": 5.1875,
+        "peakMemory": 0.432373046875,
+        "aligned": 1516,
+        "visible": 12145,
+        "alpha": 237948
+      },
+      {
+        "age": 1,
+        "height": 851.6961141228676,
+        "memory": 86.33977073431015,
+        "peakHeight": 3.65234375,
+        "peakMemory": 0.304443359375,
+        "aligned": 1479,
+        "visible": 8073,
+        "alpha": 204614
+      },
+      {
+        "age": 2,
+        "height": 603.0731986165047,
+        "memory": 54.98362672328949,
+        "peakHeight": 2.099609375,
+        "peakMemory": 0.175048828125,
+        "aligned": 1298,
+        "visible": 5000,
+        "alpha": 76911
+      },
+      {
+        "age": 4,
+        "height": 318.6124738454819,
+        "memory": 26.986869990825653,
+        "peakHeight": 0.80712890625,
+        "peakMemory": 0.0672607421875,
+        "aligned": 485,
+        "visible": 0,
+        "alpha": 2074
+      }
+    ],
+    "pathContinuity": {
+      "longStraight": 1,
+      "vertical": 1,
+      "diagonal": 0.15384615384615385,
+      "shallow": 0.6153846153846154,
+      "tightCurve": 0.11538461538461539
+    },
+    "rotatedHeightMass": [
+      861.8892983198166,
+      841.1235247850418,
+      861.894617319107
+    ]
+  }
+}

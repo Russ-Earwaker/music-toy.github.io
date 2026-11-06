@@ -1,0 +1,47 @@
+<!doctype html><meta charset="utf-8"><title>Paint renderer comparison panel</title>
+<style>body{margin:0;background:#0b111b;color:#e9f0ff;font:13px system-ui}header{padding:12px;position:relative;z-index:40;background:#101927}strong{font-size:18px}p{margin:7px 0;color:#b6c8de}#pointer{position:fixed;width:6px;height:6px;border:1px solid #bbc6dc;border-radius:50%;pointer-events:none;z-index:30;display:none}</style>
+<header><strong id="title"></strong><p id="status">Loading…</p><p id="geometry"></p></header><div id="pointer"></div>
+<canvas id="reference" data-fluid-background aria-label="World reference grid" style="position:fixed;inset:0;pointer-events:none"></canvas>
+<script type="module">
+import {HIGH_FLUID} from '../../src/simple-paint/presentation/fluid/fluid-config.js';
+import {drawLiquidBackground} from '../simple-paint-fluid/backgrounds.js';
+import {installPaintPresentation} from '../../src/simple-paint/presentation/paint-presentation.js';
+const quality=new URLSearchParams(location.search).get('quality'),highBackend=new URLSearchParams(location.search).get('highBackend');
+document.querySelector('#title').textContent=quality==='high'?(highBackend==='particles'?'High · particle prototype':'High · GPU fluid field'):'Standard · Canvas';
+let clock=0,serial=0,callbacks=new Map(),instrument='PIANO',zoom=1,pan=0,lastPoint=null,debugView=0,showReference=true,backgroundMode='grid';
+const fakeWindow={getComputedStyle:(...args)=>getComputedStyle(...args),performance:{now:()=>clock},get innerWidth(){return innerWidth},get innerHeight(){return innerHeight},get devicePixelRatio(){return devicePixelRatio},matchMedia:q=>matchMedia(q),requestAnimationFrame:fn=>{callbacks.set(++serial,fn);return serial;},cancelAnimationFrame:id=>callbacks.delete(id)};
+const project=p=>({x:innerWidth/2+pan+p.x*zoom,y:innerHeight*.54+p.y*zoom});
+const reference=document.querySelector('#reference'),geometry=document.querySelector('#geometry');
+function updateReference(){
+ drawLiquidBackground(reference,{width:innerWidth,height:innerHeight,transform:{x:innerWidth/2+pan,y:innerHeight*.54,scale:zoom},mode:backgroundMode});
+ geometry.textContent='World radius 48.6 -> '+(48.6*zoom).toFixed(1)+' CSS px | '+zoom*100+'%'+(debugView===9?' | Depth: brown=base 0, blue=rest '+HIGH_FLUID.restDepth+', gold=raised liquid':'');
+}
+function redraw(){const tasks=[...callbacks.values()];callbacks.clear();for(const fn of tasks)fn(clock);}
+updateReference();
+const effect=installPaintPresentation({quality,highBackend:highBackend??undefined,window:fakeWindow,worldToScreen:project,getInstrument:()=>instrument,getDebugView:()=>debugView});
+// Warm only the module/capability path before enabling synchronized gestures.
+effect.begin({x:0,y:0});await effect.ready;effect.stop();parent.postMessage({ready:true},location.origin);
+const status=document.querySelector('#status'),pointer=document.querySelector('#pointer');let frames=0,totalSim=0,totalRender=0;
+window.addEventListener('message',e=>{
+ if(e.source!==parent||e.origin!==location.origin)return;const m=e.data;
+ if(m.time!==undefined)clock=m.time;if(m.instrument)instrument=m.instrument;if(m.zoom)zoom=m.zoom;if(m.pan!==undefined)pan=m.pan;
+ if(m.debugView!==undefined){debugView=m.debugView;updateReference();effect.refresh();}
+ if(m.showReference!==undefined){showReference=m.showReference;backgroundMode=showReference?'grid':'dark';updateReference();effect.refresh();}
+ if(m.background!==undefined){backgroundMode=m.background;updateReference();effect.refresh();}
+ if(m.event==='transform'){updateReference();effect.refresh();redraw();}
+ if(m.point)lastPoint=m.point;
+ if(m.event==='begin'){frames=totalSim=totalRender=0;effect.begin(m.point);}
+ else if(m.event==='move')effect.move(m.point);
+ else if(m.event==='release')effect.release();else if(m.event==='stop'){effect.stop();status.textContent=effect.getProof().effectiveQuality+' | idle · 0 active';}
+ if(m.event==='tick'){
+  redraw();
+  const s=effect.getProof(),t=s.timing??{};frames++;totalSim+=t.simulationMs||0;totalRender+=t.renderMs||0;
+  const n=s.cellCount??s.count??s.particles?.length??0;
+  status.textContent=s.effectiveQuality+' | '+n+(s.backend==='gpu-field'?' cells':' particles')+' | sim '+(totalSim/frames).toFixed(2)+' / render '+(totalRender/frames).toFixed(2)+' ms CPU avg | '+(m.fps?m.fps.toFixed(0)+' FPS':'fixed step')+' | '+(t.framebuffer?.join('×')||'local Canvas')+' | grid '+(s.fieldResolution?.join('×')||(s.flowCells?s.flowCells+' sparse cells':'neighbours'))+(s.dormant?' | sleeping':'')+(t.densityBuffer?' | density '+t.densityBuffer.join('×'):'')+(s.backend==='gpu-field'?' | GPU interval '+(Number.isFinite(t.gpuMeanMs)?t.gpuMeanMs.toFixed(2)+' ms avg':'unavailable'):'');
+ }
+ if(m.qaFrame){const proof=effect.getProof();parent.postMessage({qaFrame:m.qaFrame,proof:{quality:proof.effectiveQuality,backend:proof.backend,active:proof.active,timing:proof.timing,textureBytes:proof.textureBytes}},location.origin);}
+ const s=effect.getProof();pointer.style.display=s.drawing?'block':'none';if(lastPoint){const p=project(lastPoint);pointer.style.left=(p.x-3)+'px';pointer.style.top=(p.y-3)+'px';}
+});
+window.addEventListener('resize',()=>{updateReference();effect.refresh();redraw();});
+status.textContent=effect.getProof().effectiveQuality+' · ready';
+</script>

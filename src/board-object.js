@@ -1,4 +1,5 @@
 import {surfaceVoice} from './receiver-surface.js';
+import {shapeBounds,shapeDefinition} from './simple-shapes.js';
 // Shared authored spatial schema. Existing stores are adapters, not duplicate owners.
 export const BOARD_OBJECT_VERSION=1;
 let idSerial=0;
@@ -9,7 +10,7 @@ export function createBoardObjectId(prefix){
 }
 export const CAPABILITIES=Object.freeze(['draggable','physicsBody','triggerEmitter','triggerReceiver','pitchSource','instrumentSource','loopSource','playable','decorative']);
 const kinds={
- cube:s=>({draggable:{},physicsBody:{shape:'box'},triggerReceiver:{},pitchSource:{midi:s.pitch}}),
+ cube:s=>({draggable:{},physicsBody:{shape:shapeDefinition(s.shapeType??'cube').geometry},triggerReceiver:{},pitchSource:{midi:s.pitch}}),
  cannon:s=>({draggable:{},triggerEmitter:{},instrumentSource:{instrumentId:s.instrument}}),
  ripple:s=>({draggable:{},triggerEmitter:{},instrumentSource:{instrumentId:s.instrument}}),
  drum:s=>({draggable:{},playable:{midi:s.pitch??60},instrumentSource:{instrumentId:s.instrument},triggerReceiver:{soundSource:'receiver'},loopSource:{}}),
@@ -27,7 +28,7 @@ export function createBoardObject(kind,{id,transform={x:0,y:0,rotation:0},bounds
 }
 export const boardObjectKinds=Object.freeze(Object.keys(kinds));
 export function physicalBoardObject(o){
- return createBoardObject(o.kind,{id:o.id,transform:{x:o.x,y:o.y,rotation:o.rotation||0},bounds:o.kind==='cube'?{width:o.width,height:o.height}:{radius:o.radius},appearance:o.color?{color:o.color}:{},authoredState:o.kind==='cube'?{pitch:o.sourceMidi}:{}});
+ return createBoardObject(o.kind,{id:o.id,transform:{x:o.x,y:o.y,rotation:o.rotation||0},bounds:o.kind==='cube'?shapeBounds(o.shapeType??'cube',o.width,o.height):{radius:o.radius},appearance:o.color?{color:o.color}:{},authoredState:o.kind==='cube'?{pitch:o.sourceMidi,shapeType:o.shapeType??'cube'}:{}});
 }
 export function containerBoardObject(c){
  const kind=c.presentation.type==='simple-bouncer'?'cannon':c.presentation.type==='simple-draw'?'simple-paint':null;

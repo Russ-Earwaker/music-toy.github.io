@@ -1,0 +1,51 @@
+<!doctype html><meta charset="utf-8"><title>Running optics audit</title>
+<style>body{margin:0;background:#0b111b;color:#dbe9ff;font:13px system-ui}pre{white-space:pre-wrap}</style>
+<pre id="result">Running physical-versus-visible optical audit...</pre><canvas id="field" width="720" height="500"></canvas>
+<script type="module">
+import {createGPUFluid} from '../src/simple-paint/presentation/fluid/gpu-fluid.js';
+import {gestures} from '../experiments/simple-paint-fluid/gestures.js';
+import {drawLiquidBackground} from '../experiments/simple-paint-fluid/backgrounds.js';
+const checks={},metrics={recovery:[]},version=new URLSearchParams(location.search).get('version'),canvas=document.querySelector('#field'),out=document.querySelector('#result');
+window.opticsAudit={checks,metrics};let engine;
+const test=(name,value)=>checks[name]=!!value;
+try{
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false});if(!gl)throw Error('WebGL2 unavailable');
+ engine=createGPUFluid(gl);const g=engine.grid,transform={x:360,y:250,scale:1},background=document.createElement('canvas');
+ const colour=[.15,.65,.95],yieldUI=()=>new Promise(r=>setTimeout(r,0));
+ function render(mode='grid',debugView=0,tint=colour){drawLiquidBackground(background,{width:720,height:500,transform,mode});engine.render({width:720,height:500,transform,colour:tint,cursor:{x:-100,y:-100},drawing:false,background,debugView});const pixels=new Uint8Array(720*500*4);gl.readPixels(0,0,720,500,gl.RGBA,gl.UNSIGNED_BYTE,pixels);return pixels;}
+ function contrast(pixels){const scene=background.getContext('2d').getImageData(0,0,720,500).data;let sum=0,changed=0,alpha=0,peak=0;for(let y=0;y<500;y++)for(let x=0;x<720;x++){const k=(x+y*720)*4,b=(x+(499-y)*720)*4,a=pixels[k+3]/255;let d=0;for(let c=0;c<3;c++)d+=Math.abs(pixels[k+c]+scene[b+c]*(1-a)-scene[b+c]);d/=3;sum+=d;peak=Math.max(peak,d);if(d>=2)changed++;alpha+=pixels[k+3];}return {contrastSum:sum,readablePixels:changed,peakContrast:peak,alpha};}
+ function physics(){const data=engine.debugRead(),bits=new Uint32Array(data.buffer);let hash=2166136261,height=0,memory=0,slope=0,peakHeight=0;for(let i=0;i<bits.length;i++)hash=Math.imul(hash^bits[i],16777619)>>>0;for(let y=1;y<g.height-1;y++)for(let x=1;x<g.width-1;x++){const k=(x+y*g.width)*4,h=data[k+2];height+=Math.abs(h);memory+=data[k+1];peakHeight=Math.max(peakHeight,Math.abs(h));slope+=Math.hypot(data[k+6]-data[k-2],data[k+g.width*4+2]-data[k-g.width*4+2])/(2*g.cellSize);}return {hash,height,memory,slope,peakHeight};}
+ const gesture=gestures.longCurve;engine.reset(gesture.point(0));for(let i=1;i<=108;i++){engine.step(1/30,gesture.point(i*gesture.duration/108),true);if(i%12===0)await yieldUI();}
+ const pointer=gesture.point(gesture.duration);let age=0;
+ for(const target of [0,.5,1,2,4]){
+  while(age<target-.0001){const dt=Math.min(1/30,target-age);engine.step(dt,pointer,false);age+=dt;}
+  const physical=physics(),backgrounds={};for(const mode of ['dark','grid','art'])backgrounds[mode]=contrast(render(mode));
+  metrics.recovery.push({age:target,physical,backgrounds});await yieldUI();
+ }
+ for(const mode of ['dark','grid','art']){
+  const series=metrics.recovery.map(s=>s.backgrounds[mode]);
+  test(mode+' wake perceptible at two seconds',series[3].readablePixels>300&&series[3].peakContrast>3);
+  // Conservative leveling can spread a very weak signal over more pixels.
+  // Check perceptible coverage and peak contrast as well as its integral.
+  test(mode+' optical response settles by four seconds',series[4].contrastSum<series[0].contrastSum*.06&&series[4].readablePixels<series[0].readablePixels*.01&&series[4].peakContrast<5);
+  test(mode+' contrast decreases progressively',series.every((s,i)=>!i||s.contrastSum<series[i-1].contrastSum));
+ }
+ // A synthetic shallow groove distinguishes optical memory amplification from
+ // changing the simulation's geometry or extending its recovery.
+ engine.reset({x:0,y:0});const data=new Float32Array(g.width*g.height*4),o=engine.state.origin;
+ for(let y=0;y<g.height;y++)for(let x=0;x<g.width;x++){const k=(x+y*g.width)*4,wx=o.x+(x+.5)*g.cellSize,wy=o.y+(y+.5)*g.cellSize;data[k]=1;data[k+2]=-.6*Math.exp(-(wx*wx/(100*100)+wy*wy/(25*25)));data[k+3]=2;}
+ engine.debugWriteMaterial(data);const shallow=contrast(render('art'));
+ for(let k=1;k<data.length;k+=4)data[k]=.8;engine.debugWriteMaterial(data);const remembered=contrast(render('art'));
+ metrics.shallow={withoutMemory:shallow,withMemory:remembered};
+ if(version!=='before'){
+  test('memory meaningfully amplifies identical shallow deformation',remembered.contrastSum>shallow.contrastSum*1.2);
+  const before=physics().hash;render('art',6);render('art',7);render('art',8);test('render components never mutate physical state',physics().hash===before);
+  const refractBlue=render('art',6,[0,0,1]),refractRed=render('art',6,[1,0,0]);test('instrument colour never tints refractive body',refractBlue.every((v,i)=>v===refractRed[i]));
+  const neutralBlue=render('art',8,[0,0,1]),neutralRed=render('art',8,[1,0,0]);test('FINAL WITHOUT TINT is instrument independent',neutralBlue.every((v,i)=>v===neutralRed[i]));
+  const edge=render('art',7);test('meniscus remains translucent',edge.every((v,i)=>i%4!==3||v<128));
+ }
+ for(let k=2;k<data.length;k+=4)data[k]=0;engine.debugWriteMaterial(data);const flat=render('art');test('flat height with strong memory draws nothing',flat.every((v,i)=>i%4!==3||v===0));
+ test('no WebGL errors',gl.getError()===gl.NO_ERROR);
+ const pass=Object.values(checks).every(Boolean);out.textContent=(pass?'PASS':'FAIL')+' '+JSON.stringify({checks,metrics},null,2);document.title=(pass?'PASS':'FAIL')+' optics audit';engine.destroy();
+}catch(error){engine?.destroy();checks.exception=false;out.textContent='FAIL '+error.stack;document.title='FAIL optics audit';}
+</script>

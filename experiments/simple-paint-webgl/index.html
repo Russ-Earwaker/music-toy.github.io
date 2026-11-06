@@ -1,0 +1,37 @@
+<!doctype html><meta charset="utf-8"><title>Simple Paint · Standard / High</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b111b;color:#e9f0ff;font:14px system-ui;display:flex;flex-direction:column;height:100vh}header{padding:16px;background:#141e2e}button,select{font:inherit;padding:8px 12px;margin:3px;background:#263650;border:1px solid #647896;border-radius:6px;color:inherit}main{display:flex;flex:1;min-height:0}iframe{width:50%;height:100%;border:0;border-right:1px solid #33435a}p{margin:8px 0;color:#adbbcc}#status{margin-left:12px}
+</style>
+<header><strong>Simple Paint — identical deterministic input, independent presentation</strong><br>
+<button data-case="slow">Slow</button><button data-case="fast">Fast</button><button data-case="pause">Pause</button><button data-case="turn">Sharp Turn</button><button data-case="loop">Loop</button><button id="release">Release</button><button id="clear">Clear</button>
+<select id="instrument" aria-label="Instrument"><option>PIANO</option><option>BELL</option><option>KALIMBA</option></select>
+<select id="zoom" aria-label="Zoom"><option value="1">100%</option><option value=".5">50%</option><option value="2">200%</option></select><button id="pan">Pan +40px</button><span id="status">Loading renderers…</span>
+<button id="freeze">Freeze / resume</button><button id="advance">Advance 0.5s</button>
+<p>Dark board prototype only. High affects the gesture medium; authored paths, notes and controls remain shared DOM in the app. Timings measure CPU work/GL submission, not GPU completion.</p></header>
+<main><iframe title="Standard Paint" src="panel.html?quality=standard"></iframe><iframe title="High Paint" src="panel.html?quality=high"></iframe></main>
+<script type="module">
+const panels=[...document.querySelectorAll('iframe')],ready=new Set();let scenario=null,clock=0,last=0,released=false,zoom=1,pan=0,frozen=false;
+const status=document.querySelector('#status');
+function send(message){for(const p of panels)p.contentWindow.postMessage(message,location.origin);}
+window.addEventListener('message',e=>{if(e.origin!==location.origin||!panels.some(p=>p.contentWindow===e.source))return;if(e.data.ready){ready.add(e.source);status.textContent=ready.size===2?'Ready — choose a gesture':'Loading renderers…';}});
+function point(t){
+ if(scenario==='slow')return {x:-110+Math.min(t*.06,220),y:0};
+ if(scenario==='fast')return {x:-260+Math.min(t*.5,520),y:0};
+ if(scenario==='pause')return {x:-110+Math.min(t*.24,220),y:0};
+ if(scenario==='turn'){const a=Math.min(t*.25,440);return a<220?{x:-110+a,y:-80}:{x:110,y:-80+a-220};}
+ return {x:Math.cos(t*.0018)*100,y:Math.sin(t*.0018)*85};
+}
+for(const button of document.querySelectorAll('[data-case]'))button.onclick=()=>{
+ if(ready.size<2)return;scenario=button.dataset.case;clock=0;last=0;released=false;frozen=false;
+ send({event:'begin',point:point(0),time:clock,zoom,pan,instrument:document.querySelector('#instrument').value});
+};
+document.querySelector('#release').onclick=()=>{released=true;send({event:'release',time:clock});};
+document.querySelector('#clear').onclick=()=>{scenario=null;send({event:'stop',time:clock});};
+document.querySelector('#zoom').onchange=e=>{zoom=Number(e.target.value);send({event:'transform',zoom,pan});};
+document.querySelector('#pan').onclick=()=>{pan=pan?0:40;send({event:'transform',zoom,pan});};
+document.querySelector('#instrument').onchange=e=>send({event:'instrument',instrument:e.target.value});
+function advance(elapsed,fps){if(!scenario)return;clock+=elapsed;if(!released)send({event:'move',point:point(clock),time:clock});send({event:'tick',time:clock,fps});}
+document.querySelector('#freeze').onclick=()=>frozen=!frozen;
+document.querySelector('#advance').onclick=()=>{frozen=true;for(let i=0;i<30;i++)advance(1000/60,0);};
+function frame(now){if(!frozen){const elapsed=last?now-last:16.667;advance(Math.min(33,elapsed),1000/Math.max(1,elapsed));}last=now;requestAnimationFrame(frame);}requestAnimationFrame(frame);
+</script>

@@ -1,0 +1,216 @@
+PASS {
+  "checks": {
+    "explicit positive restDepth is exposed": true,
+    "calm field is exactly restDepth": true,
+    "calm liquid is optically neutral": true,
+    "stationary pointer removes depth": true,
+    "removed volume raises neighbouring depth": true,
+    "initial displacement approximately conserves volume": true,
+    "stationary hold approaches the solid base": true,
+    "liquid depth stays nonnegative": true,
+    "stationary displacement forms raised ring": true,
+    "hold does not emit liquid indefinitely": true,
+    "held displacement approximately conserves volume": true,
+    "stationary ring surrounds the contact": true,
+    "base contact is direct art visibility, not a dark hole": true,
+    "active base contact has no added GPU cursor glow": true,
+    "liquid never changes base artwork pixels": true,
+    "release fills the low-depth center": true,
+    "raised liquid collapses as channel heals": true,
+    "recovery returns toward restDepth": true,
+    "recovery redistributes rather than deleting liquid": true,
+    "slow leaves continuous physical low-depth wake": true,
+    "slow has nonnegative depth": true,
+    "slow approximately conserves displaced volume": true,
+    "fast leaves continuous physical low-depth wake": true,
+    "fast has nonnegative depth": true,
+    "fast approximately conserves displaced volume": true,
+    "loop leaves continuous physical low-depth wake": true,
+    "loop has nonnegative depth": true,
+    "loop approximately conserves displaced volume": true,
+    "diagonal leaves continuous physical low-depth wake": true,
+    "diagonal has nonnegative depth": true,
+    "diagonal approximately conserves displaced volume": true,
+    "refraction tends to zero at base contact": true,
+    "raised depth refracts more at equal slope": true,
+    "memory cannot reveal flat resting depth": true,
+    "coarse touch field also reaches the base": true,
+    "coarse touch field also conserves displaced volume": true,
+    "coarse reconstruction reveals clean base": true,
+    "no WebGL errors": true
+  },
+  "metrics": {
+    "initialPress": {
+      "center": 3.5946316719055176,
+      "min": 3.5946316719055176,
+      "max": 10.237296104431152,
+      "removed": 216.32626152038574,
+      "raised": 216.32623863220215,
+      "balanceError": 1.0580399916721673e-7,
+      "channel": 32
+    },
+    "hold": [
+      {
+        "center": 0.000053882598876953125,
+        "min": 0.000053882598876953125,
+        "max": 11.225584030151367,
+        "removed": 459.1207456588745,
+        "raised": 459.11549282073975,
+        "balanceError": 0.000011441082077934396,
+        "channel": 52
+      },
+      {
+        "center": 0.000053882598876953125,
+        "min": 0.000053882598876953125,
+        "max": 10.209418296813965,
+        "removed": 462.8746838569641,
+        "raised": 462.85702896118164,
+        "balanceError": 0.00003814184788711918,
+        "channel": 52
+      }
+    ],
+    "ringDepth": [
+      10.025491714477539,
+      10.20938777923584,
+      9.40473747253418,
+      10.209418296813965,
+      10.025496482849121,
+      10.209418296813965,
+      9.40473747253418,
+      10.209388732910156,
+      10.025492668151855,
+      10.209388732910156,
+      9.404727935791016,
+      10.20938777923584,
+      10.025490760803223,
+      10.20938777923584,
+      9.404727935791016,
+      10.209388732910156
+    ],
+    "contactAlpha": 0,
+    "release": [
+      {
+        "age": 0,
+        "center": 0.000053882598876953125,
+        "min": 0.000053882598876953125,
+        "max": 10.209418296813965,
+        "removed": 462.8746838569641,
+        "raised": 462.85702896118164,
+        "balanceError": 0.00003814184788711918,
+        "channel": 52
+      },
+      {
+        "age": 0.5,
+        "center": 0.0707545280456543,
+        "min": 0.0707545280456543,
+        "max": 9.450154304504395,
+        "removed": 423.0895175933838,
+        "raised": 423.0643539428711,
+        "balanceError": 0.00005947594886262155,
+        "channel": 52
+      },
+      {
+        "age": 1,
+        "center": 0.4669160842895508,
+        "min": 0.4669160842895508,
+        "max": 8.801824569702148,
+        "removed": 387.33859872817993,
+        "raised": 387.30338954925537,
+        "balanceError": 0.00009090025894700224,
+        "channel": 52
+      },
+      {
+        "age": 2,
+        "center": 4.193284511566162,
+        "min": 4.193284034729004,
+        "max": 8.156346321105957,
+        "removed": 299.37729835510254,
+        "raised": 299.3203525543213,
+        "balanceError": 0.00019021415816808016,
+        "channel": 0
+      },
+      {
+        "age": 4,
+        "center": 7.671462059020996,
+        "min": 7.671462059020996,
+        "max": 8.035304069519043,
+        "removed": 142.5376296043396,
+        "raised": 142.43036651611328,
+        "balanceError": 0.0007525247089071327,
+        "channel": 0
+      },
+      {
+        "age": 6,
+        "center": 7.8819260597229,
+        "min": 7.8819260597229,
+        "max": 8.014714241027832,
+        "removed": 91.85190677642822,
+        "raised": 91.69076442718506,
+        "balanceError": 0.001754371301571256,
+        "channel": 0
+      },
+      {
+        "age": 10,
+        "center": 7.961310863494873,
+        "min": 7.961310863494873,
+        "max": 8.005114555358887,
+        "removed": 54.05610704421997,
+        "raised": 53.711313247680664,
+        "balanceError": 0.006378442980683978,
+        "channel": 0
+      }
+    ],
+    "drag": {
+      "slow": {
+        "continuity": 1,
+        "center": 1.04254150390625,
+        "min": 0.00002288818359375,
+        "max": 13.915942192077637,
+        "removed": 1164.5044913291931,
+        "raised": 1164.5595817565918,
+        "balanceError": 0.00004730804201175739,
+        "channel": 132
+      },
+      "fast": {
+        "continuity": 1,
+        "center": 0.6213531494140625,
+        "min": 0.01943063735961914,
+        "max": 17.409975051879883,
+        "removed": 3055.2002000808716,
+        "raised": 3055.1912870407104,
+        "balanceError": 0.0000029173342424162196,
+        "channel": 398
+      },
+      "loop": {
+        "continuity": 1,
+        "center": 9.880375862121582,
+        "min": 0.000053882598876953125,
+        "max": 20.433486938476562,
+        "removed": 1932.914161682129,
+        "raised": 1932.9005031585693,
+        "balanceError": 0.000007066285627336865,
+        "channel": 221
+      },
+      "diagonal": {
+        "continuity": 1,
+        "center": 1.726473331451416,
+        "min": 0.00006628036499023438,
+        "max": 16.072803497314453,
+        "removed": 2059.3344717025757,
+        "raised": 2059.3360929489136,
+        "balanceError": 7.872671293411813e-7,
+        "channel": 213
+      }
+    },
+    "depthRefraction": [
+      0,
+      28,
+      33
+    ],
+    "coarse": {
+      "center": 0.0009884834289550781,
+      "volumeError": 0.000019797777162793284,
+      "alpha": 0
+    }
+  }
+}

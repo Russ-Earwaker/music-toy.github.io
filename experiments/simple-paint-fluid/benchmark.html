@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>GPU fluid throughput baseline</title>
+<style>body{background:#09111c;color:#dce9ff;font:15px system-ui}pre{position:relative;z-index:2;background:#101b2bdc;padding:18px;white-space:pre-wrap}canvas{position:fixed;inset:0;width:960px;height:600px;pointer-events:none}</style>
+<pre id="result">Running one-backend GPU field benchmark…</pre><canvas id="field" width="960" height="600"></canvas>
+<script type="module">
+import {createGPUFluid} from '../../src/simple-paint/presentation/fluid/gpu-fluid.js';
+const out=document.querySelector('#result'),canvas=document.querySelector('#field');let engine;
+try{
+ const gl=canvas.getContext('webgl2',{alpha:true,antialias:false}),timer=gl?.getExtension('EXT_disjoint_timer_query_webgl2');if(!gl)throw Error('WebGL2 unavailable');engine=createGPUFluid(gl);engine.reset({x:100,y:0});
+ const queryArgs=new URLSearchParams(location.search),warmup=Math.max(4,Number(queryArgs.get('warmup'))||60),measured=Math.max(8,Number(queryArgs.get('frames'))||120);
+ let frame=0;
+ function run(){const t=++frame/60,p={x:Math.cos(t*1.8)*100,y:Math.sin(t*1.8)*85};engine.step(1/60,p,true);engine.render({width:960,height:600,dpr:1,transform:{x:480,y:300,scale:1},colour:[.1,.6,1],cursor:{x:p.x+480,y:p.y+300},drawing:true});}
+ // Explicit developer benchmark only: finish once after warmup and once after the batch.
+ for(let i=0;i<warmup;i++)run();gl.finish();
+ const query=timer?gl.createQuery():null;if(query)gl.beginQuery(timer.TIME_ELAPSED_EXT,query);
+ const started=performance.now();for(let i=0;i<measured;i++)run();if(query)gl.endQuery(timer.TIME_ELAPSED_EXT);gl.flush();gl.finish();
+ const elapsed=performance.now()-started;let gpuMs=null;
+ // Browser query-result delivery may lag gl.finish(); wait asynchronously, outside
+ // the measured wall interval, rather than forcing a result or reporting zero.
+ if(query)for(let i=0;i<30&&!gl.getQueryParameter(query,gl.QUERY_RESULT_AVAILABLE);i++)await new Promise(requestAnimationFrame);
+ if(query){if(gl.getQueryParameter(query,gl.QUERY_RESULT_AVAILABLE)&&!gl.getParameter(timer.GPU_DISJOINT_EXT))gpuMs=gl.getQueryParameter(query,gl.QUERY_RESULT)/1e6/measured;gl.deleteQuery(query);}
+ const deviceInfo=gl.getExtension('WEBGL_debug_renderer_info');
+ const result={renderer:deviceInfo?gl.getParameter(deviceInfo.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER),backend:'gpu-field',grid:[engine.grid.width,engine.grid.height],pressureIterations:engine.state.pressureIterations,measuredFrames:measured,warmupFrames:warmup,submissionWallMsPerFrame:elapsed/measured,gpuIntervalMsPerFrame:gpuMs,textureBytes:engine.state.textureBytes,noGLError:gl.getError()===gl.NO_ERROR,note:'Developer batch baseline: submission wall time and GPU interval are separate. Excludes activity probes, startup and compositor. Not a production FPS guarantee.'};
+ out.textContent=JSON.stringify(result,null,2);document.title='Complete · GPU fluid throughput baseline';engine.destroy();
+}catch(error){engine?.destroy();out.textContent='FAIL '+error.stack;document.title='FAIL · GPU fluid throughput baseline';}
+</script>

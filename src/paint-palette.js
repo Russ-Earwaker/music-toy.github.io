@@ -23,7 +23,11 @@ export function installPaintPalette() {
  const palette = createPaletteState({ onChange: render });
  let stroke = null, config = null, hold = null, swallowClickUntil = 0, suppressBoardClickUntil = 0;
  const name = id => getDisplayNameForId(id) || id || 'Empty well';
+ let wasEquipped=false;
  function render() {
+  const equipped=!!palette.state.activePaletteTool;
+  if(equipped&&!wasEquipped)document.dispatchEvent(new CustomEvent('paint-palette:equip'));
+  wasEquipped=equipped;
   buttons.forEach((button, i) => {
    const id = palette.state.slots[i];
    button.style.setProperty('--paint', id ? instrumentColour(id) : '#63534b');
@@ -42,6 +46,11 @@ export function installPaintPalette() {
   root.querySelectorAll('.palette-wells,.palette-tools,.palette-shuffle,.palette-hint').forEach(el => el.hidden = !expanded);
  }
  handle.addEventListener('click', toggle);
+ document.addEventListener('simple-shape-palette:open',()=>{
+  if(!window.matchMedia?.('(max-width:600px)').matches)return;
+  handle.setAttribute('aria-expanded','false');
+  root.querySelectorAll('.palette-wells,.palette-tools,.palette-shuffle,.palette-hint').forEach(el=>el.hidden=true);
+ });
  function cancelHold() { if (hold) { clearTimeout(hold.timer); hold.button?.classList.remove('is-holding'); } hold = null; }
  for (let i=0; i<6; i++) {
   const button = document.createElement('button'); button.type = 'button'; button.className = 'palette-well';
@@ -228,6 +237,7 @@ export function installPaintPalette() {
  document.addEventListener('keydown',event => { if (event.key==='Escape' && !config) { releaseStroke(); palette.clear(); } });
  window.addEventListener('blur', () => { cancelHold(); releaseStroke(); });
  const reset=() => { cancelHold(); releaseStroke(); palette.clear(); closeConfig(); effects=[]; };
+ document.addEventListener('simple-toy-box:choose',reset);
  window.addEventListener('scene:new',reset); window.addEventListener('scene:load',reset);
  window.addEventListener('instrument-colour:change',render);
  render();

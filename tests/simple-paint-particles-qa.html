@@ -3,7 +3,7 @@
 <header><strong>Production Simple Paint particle renderer</strong><br>
 <button data-case="slow">Slow straight</button><button data-case="fast">Fast straight</button><button data-case="pause">Pause</button><button data-case="turn">Sharp turn</button><button data-case="loop">Loop</button><button id="advance">Advance 0.5s</button><button id="freeze">Freeze / resume</button><button id="release">Release</button><button id="reset">Clear</button>
 <select id="instrument" aria-label="Instrument"><option>PIANO</option><option>BELL</option><option>KALIMBA</option></select><button id="compare">Compare DrawGrid</button><span id="status">Idle</span></header>
-<p>Deterministic visual QA uses the production renderer and its clock/coordinate injection. Select a gesture, then freeze to inspect circular encounters and coasting particles. Clear stops all work.</p><svg><path id="trail"/></svg>
+<p>Deterministic visual QA uses the production renderer and its clock/coordinate injection. Select a gesture, then freeze to inspect circular displacement and slowly closing channels. Clear stops all work.</p><svg><path id="trail"/></svg>
 <script type="module">
 import {installPaintGestureParticles} from '../src/simple-paint-particles.js';
 import {DRAWGRID_POINTER_SCREEN_RADIUS} from '../src/drawgrid/drawgrid-pointer-radius.js';
@@ -26,7 +26,7 @@ function point(t){const center=innerWidth*(comparison?.25:.5),f=comparison?.5:1;
 function advance(elapsed){clock+=elapsed;const p=point(clock-start);if(effect.getProof().drawing){if(scenario!=='pause'||clock-start<1500)effect.move(p);history.push(p);if(history.length>120)history.shift();trail.setAttribute('d',history.map((v,i)=>(i?'L':'M')+v.x+','+(v.y-100)).join(' '));}
  drawReference(p,elapsed,effect.getProof().drawing);
  const tasks=[...callbacks.values()];callbacks.clear();const before=performance.now();for(const fn of tasks)fn(clock);total+=performance.now()-before;frames++;
- const s=effect.getProof();status.textContent=scenario+' | '+s.particles.length+' particles / '+s.particles.filter(p=>p.pushEnergy>.1).length+' hot | '+(s.speed||0).toFixed(0)+' px/s | '+(total/frames).toFixed(2)+' ms/frame';
+ const s=effect.getProof();status.textContent=scenario+' | '+s.particles.length+' particles / '+s.particles.filter(p=>Math.hypot(p.vx,p.vy)>25).length+' moving | '+(s.speed||0).toFixed(0)+' px/s | '+(total/frames).toFixed(2)+' ms/frame | sim '+(s.timing?.simulationMs||0).toFixed(2)+' / render '+(s.timing?.renderMs||0).toFixed(2)+' ms | '+(s.neighbourChecks||0)+' checks';
 }
 function animate(now){if(!scenario)return;const elapsed=Math.min(33,now-(last||now));last=now;if(!frozen)advance(elapsed);animationFrame=requestAnimationFrame(animate);}
 for(const button of document.querySelectorAll('[data-case]'))button.onclick=()=>{const running=!!scenario;scenario=button.dataset.case;frozen=false;clock=start=0;last=0;frames=total=0;history=[];if(comparison)resetReference();effect.begin(point(0));if(!running)requestAnimationFrame(animate);};

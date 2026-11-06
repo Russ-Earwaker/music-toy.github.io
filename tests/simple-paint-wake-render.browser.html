@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><title>High Paint GPU wake assertions</title>
+<style>body{background:#09101b;color:#dce8ff;font:16px system-ui}pre{position:relative;z-index:50;margin-top:150px}</style>
+<pre id="result">Running GPU assertions…</pre>
+<script type="module">
+import {acquireHighQualityBoardRenderer} from '../src/simple-paint/presentation/high/high-quality-board-renderer.js';
+const result=document.querySelector('#result');
+let surface;
+try{
+ const win={innerWidth:256,innerHeight:128,devicePixelRatio:1};surface=acquireHighQualityBoardRenderer({document,window:win});
+ const values=[];
+ for(let y=16;y<=112;y+=6)for(let x=16;x<=240;x+=6)values.push(x,y,1.6,x<128?0:1,1,x<128?80:40,0,0);
+ const data=new Float32Array(values),worldDomain={left:0,top:0,width:256,height:128},domain={...worldDomain};
+ surface.register('test',()=>({data,count:data.length/8,colour:'#248cf4',domain,worldDomain,blurScreen:3}),e=>{throw e;});
+ surface.render();surface.canvas.style.width='256px';surface.canvas.style.height='128px';
+ const gl=surface.canvas.getContext('webgl2'),pixels=new Uint8Array(256*128*4);gl.readPixels(0,0,256,128,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+ const alpha=(x,y)=>pixels[(x+y*256)*4+3];
+ const calm=alpha(48,64),interior=alpha(180,64);
+ let boundary=0;for(let x=220;x<255;x++)boundary=Math.max(boundary,alpha(x,64));
+ const checks={velocityWithoutDisturbanceInvisible:calm<=1,disturbedBodyVisible:interior>10,boundaryBrighterThanInterior:boundary>interior+5,noGLError:gl.getError()===gl.NO_ERROR};
+ const passed=Object.values(checks).every(Boolean);result.textContent=(passed?'PASS':'FAIL')+' '+JSON.stringify({checks,calm,interior,boundary});
+ document.title=(passed?'PASS':'FAIL')+' · High Paint GPU wake assertions';
+}catch(error){result.textContent='FAIL '+error.message;document.title='FAIL · High Paint GPU wake assertions';surface?.unregister('test');}
+</script>

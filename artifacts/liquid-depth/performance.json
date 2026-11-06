@@ -1,0 +1,78 @@
+[
+  {
+    "version": "before",
+    "result": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 SUPER (0x00001E84) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "backend": "gpu-field",
+      "grid": [
+        256,
+        160
+      ],
+      "pressureIterations": 14,
+      "measuredFrames": 120,
+      "warmupFrames": 60,
+      "submissionWallMsPerFrame": 0.03916666656732559,
+      "gpuIntervalMsPerFrame": 0.2336426666666667,
+      "textureBytes": 2403024,
+      "noGLError": true,
+      "note": "Developer batch baseline: submission wall time and GPU interval are separate. Excludes activity probes, startup and compositor. Not a production FPS guarantee."
+    }
+  },
+  {
+    "version": "after",
+    "result": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 SUPER (0x00001E84) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "backend": "gpu-field",
+      "grid": [
+        256,
+        160
+      ],
+      "pressureIterations": 14,
+      "measuredFrames": 120,
+      "warmupFrames": 60,
+      "submissionWallMsPerFrame": 0.050833333283662796,
+      "gpuIntervalMsPerFrame": 0.48655573333333335,
+      "textureBytes": 3713744,
+      "noGLError": true,
+      "note": "Developer batch baseline: submission wall time and GPU interval are separate. Excludes activity probes, startup and compositor. Not a production FPS guarantee."
+    }
+  },
+  {
+    "version": "after-repeat",
+    "result": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 SUPER (0x00001E84) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "backend": "gpu-field",
+      "grid": [
+        256,
+        160
+      ],
+      "pressureIterations": 14,
+      "measuredFrames": 120,
+      "warmupFrames": 60,
+      "submissionWallMsPerFrame": 0.0625,
+      "gpuIntervalMsPerFrame": 0.7294976,
+      "textureBytes": 3713744,
+      "noGLError": true,
+      "note": "Developer batch baseline: submission wall time and GPU interval are separate. Excludes activity probes, startup and compositor. Not a production FPS guarantee."
+    }
+  },
+  {
+    "version": "before-repeat",
+    "result": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 SUPER (0x00001E84) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "backend": "gpu-field",
+      "grid": [
+        256,
+        160
+      ],
+      "pressureIterations": 14,
+      "measuredFrames": 120,
+      "warmupFrames": 60,
+      "submissionWallMsPerFrame": 0.034166666741172476,
+      "gpuIntervalMsPerFrame": 0.4021106666666666,
+      "textureBytes": 2403024,
+      "noGLError": true,
+      "note": "Developer batch baseline: submission wall time and GPU interval are separate. Excludes activity probes, startup and compositor. Not a production FPS guarantee."
+    }
+  }
+]

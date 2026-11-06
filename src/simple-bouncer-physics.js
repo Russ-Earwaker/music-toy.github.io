@@ -1,6 +1,8 @@
 import {quantizeBouncerOffsetTick} from './bouncer-transport.js';
 import {SAFE_LINE_MIDI} from './free-play-line.js';
-import {sweepCapsule,surfaceContact} from './receiver-surface.js';
+import {sweepCapsule,sweepPolygon,surfaceContact} from './receiver-surface.js';
+import {boardCollisionBody} from './board-collision-body.js';
+import {shapeBounds} from './simple-shapes.js';
 export const CANNON_SIZE=80,CANNON_BARREL_LENGTH=96,DEFAULT_CANNON_INSTRUMENT='KALIMBA';
 export const aimDirection=(start,end)=>{const dx=end.x-start.x,dy=end.y-start.y,length=Math.hypot(dx,dy);return length<3?{x:0,y:-1}:{x:dx/length,y:dy/length};};
 export const BOUNCER_STEP=48,BOUNCER_BAR=384,CUBE_SIZE=58,BALL_RADIUS=13;
@@ -12,6 +14,11 @@ export function makeCube(serial,x,y){return {id:`cube:${serial}`,x,y,size:CUBE_S
 // Simulation time is seconds, sampled at a fixed integration interval, never RAF
 // count. A throw is evaluated once; no physics runs in the audio playback path.
 export function simulateThrow({cubes,launch,bars=1,bpm=120,startTick=0,priorCollisions=[],ballMode:mode='normal'}){
+ // Authored physical records retain Cube compatibility; adapt their geometry
+ // once per flight, just like other capability-based receiver bodies.
+ cubes=cubes.map(c=>c.shapeType&&c.shapeType!=='cube'?{
+  ...c,...boardCollisionBody(c.boardObject||{id:c.id,transform:{x:c.x,y:c.y,rotation:c.rotation||0},bounds:shapeBounds(c.shapeType,c.width,c.height),capabilities:{triggerReceiver:{},pitchSource:{midi:c.sourceMidi}}}),
+ }:c);
  const durationTicks=clampBars(bars)*BOUNCER_BAR,seconds=durationTicks*60/(bpm*96),dt=1/240;
  const gravity=mode==='gravity'?BALL_GRAVITY:0,retention=gravity?GRAVITY_BOUNCE_RETENTION:1,limit=gravity?Math.min(seconds,GRAVITY_MAX_SECONDS):seconds;let termination=null,impactCount=priorCollisions.length;
  const ball={...launch};
@@ -23,6 +30,7 @@ export function simulateThrow({cubes,launch,bars=1,bpm=120,startTick=0,priorColl
   for(let contacts=0;remaining>1e-10&&contacts<32;contacts++){
    let hit=null;
    for(const cube of cubes){
+    if(cube.polygon){const candidate=sweepPolygon(ball,{x:ball.vx,y:ball.vy},cube.polygon,BALL_RADIUS,remaining);if(candidate&&(!hit||candidate.time<hit.time))hit={...candidate,cube,circle:true};continue;}
     if(cube.segments){for(const segment of cube.segments){const candidate=sweepCapsule(ball,{x:ball.vx,y:ball.vy},segment,BALL_RADIUS+(cube.surfaceRadius||0),remaining);if(candidate&&(!hit||candidate.time<hit.time))hit={...candidate,cube,circle:true};}continue;}
     if(Number.isFinite(cube.radius)){
      const dx=ball.x-cube.x,dy=ball.y-cube.y,r=cube.radius+BALL_RADIUS,a=ball.vx**2+ball.vy**2,b=dx*ball.vx+dy*ball.vy,c=dx*dx+dy*dy-r*r;

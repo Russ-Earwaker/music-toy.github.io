@@ -1,0 +1,109 @@
+PASS {
+  "checks": {
+    "wake memory retained at 0.5 / 1 / 2 seconds": true,
+    "physical height and visible wake survive two seconds": true,
+    "memory decays progressively": true,
+    "physical height relaxes progressively": true,
+    "rendered wake weakens as geometry flattens": true,
+    "four-second channel levels toward restDepth": true,
+    "height and memory remain spatially aligned": true,
+    "longStraight swept channel is continuous": true,
+    "vertical swept channel is continuous": true,
+    "diagonal swept channel is continuous": true,
+    "shallow swept channel is continuous": true,
+    "tightCurve swept channel is continuous": true,
+    "large fast input sweeps without isolated stamps": true,
+    "radial contact independent of grid orientation": true,
+    "domain edge is invisible with fully disturbed edge cells": true,
+    "domain influence rolls in gradually": true,
+    "left domain boundary has zero visible seam": true,
+    "right domain boundary has zero visible seam": true,
+    "top domain boundary has zero visible seam": true,
+    "bottom domain boundary has zero visible seam": true,
+    "flat remembered liquid remains transparent": true,
+    "reconstructed normals have no cell-boundary jumps": true,
+    "clear surface uses valid premultiplied colours over light art": true,
+    "field becomes quiet for automatic cleanup": true,
+    "no WebGL errors": true
+  },
+  "metrics": {
+    "recovery": [
+      {
+        "age": 0,
+        "height": 4549.914071559906,
+        "memory": 736.9539955361934,
+        "peakHeight": 11.470132827758789,
+        "peakMemory": 0.9974982738494873,
+        "aligned": 1509,
+        "visible": 112282,
+        "alpha": 4380168
+      },
+      {
+        "age": 0.5,
+        "height": 3804.847514152527,
+        "memory": 557.5628597356986,
+        "peakHeight": 7.9749274253845215,
+        "peakMemory": 0.8423261642456055,
+        "aligned": 1456,
+        "visible": 101811,
+        "alpha": 3620662
+      },
+      {
+        "age": 1,
+        "height": 3184.7953777313232,
+        "memory": 405.26053727988,
+        "peakHeight": 7.7689642906188965,
+        "peakMemory": 0.7031051516532898,
+        "aligned": 1287,
+        "visible": 89450,
+        "alpha": 2721848
+      },
+      {
+        "age": 2,
+        "height": 2141.7276706695557,
+        "memory": 180.55405713573413,
+        "peakHeight": 4.552968978881836,
+        "peakMemory": 0.44410064816474915,
+        "aligned": 854,
+        "visible": 58048,
+        "alpha": 1298381
+      },
+      {
+        "age": 4,
+        "height": 1173.314579963684,
+        "memory": 5.124482267251122,
+        "peakHeight": 0.4966564178466797,
+        "peakMemory": 0.016038255766034126,
+        "aligned": 80,
+        "visible": 0,
+        "alpha": 97489
+      }
+    ],
+    "pathContinuity": {
+      "longStraight": 1,
+      "vertical": 1,
+      "diagonal": 1,
+      "shallow": 1,
+      "tightCurve": 1
+    },
+    "rotatedHeightMass": [
+      1306.1665148735046,
+      1293.1676306724548,
+      1306.1638135910034
+    ],
+    "domainAlpha": [
+      0,
+      0,
+      1,
+      7,
+      37,
+      0
+    ],
+    "maxNormalPixelStep": 42,
+    "subpixelNormalStep": 1,
+    "quiet": {
+      "disturbance": 0.00784313725490196,
+      "speed": 0
+    }
+  }
+}

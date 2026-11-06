@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>Clear gel refraction</title>
+<style>body{margin:0;background:#101824;color:#fff;font:14px system-ui}canvas{position:absolute;top:80px;left:0}header{padding:12px}button{margin-right:12px}</style>
+<header><button id="run">Replay clear gel</button><button id="colour">Change instrument tint</button><span id="result">Running GPU checks</span></header>
+<canvas id="art" width="960" height="560" data-fluid-background></canvas><canvas id="liquid" width="960" height="560"></canvas>
+<script type="module">
+import {createGPUFluid} from '../src/simple-paint/presentation/fluid/gpu-fluid.js';
+const art=document.querySelector('#art'),ctx=art.getContext('2d'),canvas=document.querySelector('#liquid'),out=document.querySelector('#result');
+ctx.fillStyle='#101824';ctx.fillRect(0,0,960,560);
+for(let y=0;y<560;y+=20)for(let x=0;x<960;x+=20){ctx.fillStyle=((x+y)/20)%2?'#233747':'#344d5a';ctx.fillRect(x,y,20,20);}
+ctx.strokeStyle='#e9f1df';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(40,280);ctx.bezierCurveTo(300,120,600,440,920,200);ctx.stroke();
+ctx.fillStyle='#e2d9b8';ctx.font='28px system-ui';ctx.fillText('Background art bends beneath the clear gel',90,420);
+const gl=canvas.getContext('webgl2',{premultipliedAlpha:true,antialias:false}),engine=createGPUFluid(gl);
+let colour=[.15,.65,1],playing=0;
+const args={width:960,height:560,transform:{x:480,y:280,scale:1},colour,cursor:{x:-100,y:-100},drawing:false,background:art};
+function render(){engine.render({...args,colour});}
+function pixels(){const p=new Uint8Array(960*560*4);gl.readPixels(0,0,960,560,gl.RGBA,gl.UNSIGNED_BYTE,p);return p;}
+engine.reset({x:-200,y:0});for(let i=0;i<65;i++)engine.step(1/60,{x:-200+i*6,y:Math.sin(i*.08)*30},true);
+render();const refracted=pixels();engine.render({...args,colour:[1,.1,.2]});const alternate=pixels();
+const source=ctx.getImageData(0,0,960,560).data;let bent=0,colourDelta=0,opaque=0;
+for(let y=0;y<560;y++)for(let x=0;x<960;x++){const k=(x+y*960)*4,j=(x+(559-y)*960)*4;if(refracted[k+3]>64){opaque++;let d=0;for(let c=0;c<3;c++){d+=Math.abs(refracted[k+c]-source[j+c]*refracted[k+3]/255);colourDelta+=Math.abs(refracted[k+c]-alternate[k+c]);}if(d>24)bent++;}}
+const checks={backgroundActuallyDisplaced:bent>100,colourSecondary:colourDelta/Math.max(1,opaque*3)<5,noGLError:gl.getError()===gl.NO_ERROR};
+out.textContent=(Object.values(checks).every(Boolean)?'PASS':'FAIL')+' '+JSON.stringify(checks);document.title=out.textContent;render();
+function replay(){const run=++playing;engine.reset({x:-250,y:0});let i=0;function frame(){if(run!==playing)return;const drawing=i<100;engine.step(1/60,{x:-250+Math.min(i,100)*5,y:Math.sin(Math.min(i,100)*.08)*40},drawing);render();if(++i<400)requestAnimationFrame(frame);}requestAnimationFrame(frame);}
+document.querySelector('#run').onclick=replay;document.querySelector('#colour').onclick=()=>{colour=colour[0]<.5?[1,.25,.1]:[.15,.65,1];render();};
+</script>

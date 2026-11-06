@@ -1,0 +1,66 @@
+<!doctype html><meta charset="utf-8"><title>Running depth audit</title>
+<style>body{margin:0;background:#0b111b;color:#dbe9ff;font:13px system-ui}pre{white-space:pre-wrap}</style>
+<pre id="result">Running rest-depth / solid-base contact audit...</pre><canvas id="field" width="720" height="500"></canvas>
+<script type="module">
+import {createGPUFluid} from '../src/simple-paint/presentation/fluid/gpu-fluid.js';
+import {HIGH_FLUID} from '../src/simple-paint/presentation/fluid/fluid-config.js';
+import {gestures} from '../experiments/simple-paint-fluid/gestures.js';
+import {drawLiquidBackground} from '../experiments/simple-paint-fluid/backgrounds.js';
+const canvas=document.querySelector('#field'),out=document.querySelector('#result'),checks={},metrics={};let engine;
+window.depthAudit={checks,metrics};const test=(name,value)=>checks[name]=!!value,yieldUI=()=>new Promise(r=>setTimeout(r,0));
+try{
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false});if(!gl)throw Error('WebGL2 unavailable');
+ engine=createGPUFluid(gl);const g=engine.grid,rest=HIGH_FLUID.restDepth,bg=document.createElement('canvas'),transform={x:360,y:250,scale:1};
+ function sample(data,point){const o=engine.state.origin,x=Math.floor((point.x-o.x)/g.cellSize),y=Math.floor((point.y-o.y)/g.cellSize);return rest+data[(x+y*g.width)*4+2];}
+ function stats(){const a=engine.debugRead();let low=0,high=0,min=Infinity,max=0,channel=0;for(let k=0;k<a.length;k+=4){const h=a[k+2];low+=Math.max(0,-h);high+=Math.max(0,h);min=Math.min(min,rest+h);max=Math.max(max,rest+h);if(rest+h<rest*.5)channel++;}return {center:sample(a,{x:0,y:0}),min,max,removed:low,raised:high,balanceError:Math.abs(high-low)/Math.max(low,1),channel};}
+ function render(mode='art',debugView=0){drawLiquidBackground(bg,{width:720,height:500,transform,mode});engine.render({width:720,height:500,transform,colour:[.1,.65,1],cursor:{x:-100,y:-100},drawing:false,background:bg,debugView});const pixels=new Uint8Array(720*500*4);gl.readPixels(0,0,720,500,gl.RGBA,gl.UNSIGNED_BYTE,pixels);return pixels;}
+ const alphaAt=(pixels,x=360,y=250)=>pixels[(x+(499-y)*720)*4+3];
+ engine.reset({x:0,y:0});test('explicit positive restDepth is exposed',rest>0&&engine.state.restDepth===rest);
+ const calm=engine.debugRead();test('calm field is exactly restDepth',calm.every((v,i)=>i%4!==2||v===0));test('calm liquid is optically neutral',render().every((v,i)=>i%4!==3||v===0));
+ engine.step(1/60,{x:0,y:0},true);metrics.initialPress=stats();
+ test('stationary pointer removes depth',metrics.initialPress.center<rest*.8);test('removed volume raises neighbouring depth',metrics.initialPress.raised>0&&metrics.initialPress.max>rest);
+ test('initial displacement approximately conserves volume',metrics.initialPress.balanceError<.005);
+ for(let i=0;i<59;i++){engine.step(1/60,{x:0,y:0},true);if(i%10===0)await yieldUI();}
+ const hold1=stats();for(let i=0;i<60;i++){engine.step(1/60,{x:0,y:0},true);if(i%10===0)await yieldUI();}const hold2=stats();metrics.hold=[hold1,hold2];
+ test('stationary hold approaches the solid base',hold2.center<rest*.025);test('liquid depth stays nonnegative',hold2.min>=-.001);
+ test('stationary displacement forms raised ring',hold2.max>rest*1.15&&hold2.raised>100);
+ test('hold does not emit liquid indefinitely',Math.abs(hold2.raised-hold1.raised)/Math.max(hold1.raised,1)<.25);
+ test('held displacement approximately conserves volume',hold2.balanceError<.005);
+ const data=engine.debugRead(),angles=[];for(let i=0;i<16;i++){const angle=i*Math.PI/8;angles.push(sample(data,{x:Math.cos(angle)*HIGH_FLUID.radiusWorld*1.1,y:Math.sin(angle)*HIGH_FLUID.radiusWorld*1.1}));}metrics.ringDepth=angles;
+ test('stationary ring surrounds the contact',angles.every(d=>d>rest));
+ const contactPixels=render('art');metrics.contactAlpha=alphaAt(contactPixels);test('base contact is direct art visibility, not a dark hole',alphaAt(contactPixels)<=1);
+ engine.render({width:720,height:500,transform,colour:[.1,.65,1],cursor:{x:360,y:250},drawing:true,background:bg});
+ const liveContact=new Uint8Array(720*500*4);gl.readPixels(0,0,720,500,gl.RGBA,gl.UNSIGNED_BYTE,liveContact);
+ test('active base contact has no added GPU cursor glow',alphaAt(liveContact,363,250)<=1);
+ const sceneBefore=new Uint8ClampedArray(bg.getContext('2d').getImageData(0,0,720,500).data);render('art',9);const sceneAfter=bg.getContext('2d').getImageData(0,0,720,500).data;
+ test('liquid never changes base artwork pixels',sceneBefore.every((v,i)=>v===sceneAfter[i]));
+ metrics.release=[];let age=0;for(const target of [0,.5,1,2,4,6,10]){while(age<target-.00001){const dt=Math.min(1/30,target-age);engine.step(dt,{x:0,y:0},false);age+=dt;if(Math.round(age*30)%15===0)await yieldUI();}metrics.release.push({age:target,...stats()});}
+ const healed=metrics.release.at(-1);test('release fills the low-depth center',healed.center>rest*.95);
+ test('raised liquid collapses as channel heals',healed.max<hold2.max&&healed.channel<hold2.channel);
+ test('recovery returns toward restDepth',healed.removed<hold2.removed*.15&&healed.raised<hold2.raised*.15);
+ test('recovery redistributes rather than deleting liquid',metrics.release.every(s=>Math.abs(s.raised-s.removed)/hold2.removed<.01));
+ metrics.drag={};for(const name of ['slow','fast','loop','diagonal']){
+  const gesture=gestures[name];engine.reset(gesture.point(0));const n=Math.ceil(gesture.duration/(1000/30));for(let i=1;i<=n;i++){engine.step(gesture.duration/n/1000,gesture.point(gesture.duration*i/n),true);if(i%15===0)await yieldUI();}
+  const a=engine.debugRead();let present=0,total=0;for(let u=.55;u<.98;u+=.025){total++;if(sample(a,gesture.point(gesture.duration*u))<rest*.9)present++;}
+  metrics.drag[name]={continuity:present/total,...stats()};test(name+' leaves continuous physical low-depth wake',present/total>.85);test(name+' has nonnegative depth',stats().min>=-.001);test(name+' approximately conserves displaced volume',stats().balanceError<.01);
+ }
+ // Same slope at different thickness: zero depth must suppress refraction,
+ // while a thick ridge must bend the base more than the resting layer.
+ metrics.depthRefraction=[];for(const level of [0,rest,rest*2]){
+  engine.reset({x:0,y:0});const o=engine.state.origin,a=new Float32Array(g.width*g.height*4);for(let y=0;y<g.height;y++)for(let x=0;x<g.width;x++){const k=(x+y*g.width)*4,depth=Math.max(0,level+(o.x+(x+.5)*g.cellSize)*.02);a[k]=depth/rest;a[k+2]=depth-rest;a[k+3]=2;}
+  engine.debugWriteMaterial(a);const p=render('art',10);metrics.depthRefraction.push(p[(360+249*720)*4]);
+ }
+ test('refraction tends to zero at base contact',metrics.depthRefraction[0]<=1);test('raised depth refracts more at equal slope',metrics.depthRefraction[2]>metrics.depthRefraction[1]&&metrics.depthRefraction[1]>metrics.depthRefraction[0]);
+ engine.reset({x:0,y:0});const flatMemory=engine.debugRead();for(let k=1;k<flatMemory.length;k+=4)flatMemory[k]=1;engine.debugWriteMaterial(flatMemory);test('memory cannot reveal flat resting depth',render().every((v,i)=>i%4!==3||v===0));
+ engine.destroy();engine=createGPUFluid(gl,{coarse:true});engine.reset({x:0,y:0});
+ for(let i=0;i<120;i++)engine.step(1/60,{x:0,y:0},true);
+ const cg=engine.grid,co=engine.state.origin,cd=engine.debugRead(),ci=(Math.floor(-co.x/cg.cellSize)+Math.floor(-co.y/cg.cellSize)*cg.width)*4;
+ let coarseLow=0,coarseHigh=0;for(let k=2;k<cd.length;k+=4){coarseLow+=Math.max(0,-cd[k]);coarseHigh+=Math.max(0,cd[k]);}
+ metrics.coarse={center:rest+cd[ci+2],volumeError:Math.abs(coarseHigh-coarseLow)/Math.max(coarseLow,1),alpha:alphaAt(render('art'))};
+ test('coarse touch field also reaches the base',metrics.coarse.center<rest*.025);
+ test('coarse touch field also conserves displaced volume',metrics.coarse.volumeError<.01);
+ test('coarse reconstruction reveals clean base',metrics.coarse.alpha<=3);
+ test('no WebGL errors',gl.getError()===gl.NO_ERROR);
+ const pass=Object.values(checks).every(Boolean);out.textContent=(pass?'PASS':'FAIL')+' '+JSON.stringify({checks,metrics},null,2);document.title=(pass?'PASS':'FAIL')+' depth audit';engine.destroy();
+}catch(error){engine?.destroy();checks.exception=false;out.textContent='FAIL '+error.stack;document.title='FAIL depth audit';}
+</script>

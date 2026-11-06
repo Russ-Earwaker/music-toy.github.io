@@ -1,11 +1,11 @@
-import {installPaintGestureParticles} from './simple-paint-particles.js';
+import {installPaintPresentation} from './simple-paint/presentation/paint-presentation.js';
 import {worldToScreen} from './board-viewport.js';
 import {prepareBoardDrawing} from './simple-draw-placement.js';
 import {createBoardInteractionHint} from './simple-interaction-hint.js';
 // Temporary input only: no graph object, notes, transport or persisted state.
 export function installSimpleDrawCreation({getViewport,getWorld,screenToWorld,commit,unlock=()=>{},canCreate=()=>true,onArm=()=>{},getInstrument=()=>'PIANO',particles=null}){
  let armed=false,pointer=null,points=[],overlay=null,path=null,heartbeatId,containerId,capped=false;
- particles ||= installPaintGestureParticles({worldToScreen,getInstrument:()=>getInstrument(containerId)});
+ particles ||= installPaintPresentation({worldToScreen,getInstrument:()=>getInstrument(containerId)});
  let onboarding=null;
  const hint=document.createElement('p');hint.className='simple-draw-creation-hint';hint.hidden=true;hint.textContent='Draw on the board. Release to make a toy. Esc to cancel.';document.body.append(hint);
  function clear(){const captured=pointer;pointer=null;if(captured!==null&&getViewport()?.hasPointerCapture(captured))getViewport().releasePointerCapture(captured);overlay?.remove();overlay=path=null;points=[];capped=false;}
