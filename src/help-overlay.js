@@ -1,3 +1,5 @@
+import {uiMode} from './ui-mode.js';
+import {renderSimpleHelpLabels} from './simple-help-labels.js';
 import { makeDebugLogger } from './debug-flags.js';
 
 const helpDebug = makeDebugLogger('mt_debug_logs');
@@ -5,6 +7,7 @@ const helpLog = makeDebugLogger('mt_debug_logs', 'log');
 
 const overlayState = {
   active: false,
+  trackingFrame:null,
   host: null,
   pending: false,
   observer: null,
@@ -64,7 +67,7 @@ function removeWatchers() {
 function startObserver() {
   if (overlayState.observer) return;
   const observer = new MutationObserver((mutations) => {
-    if (!overlayState.active) return;
+    if (!overlayState.active||uiMode.isSimple()) return;
     for (const mutation of mutations) {
       if (overlayState.host && overlayState.host.contains(mutation.target)) continue;
       scheduleUpdate();
@@ -73,7 +76,7 @@ function startObserver() {
   });
   observer.observe(document.body, {
     attributes: true,
-    attributeFilter: ['style', 'class', 'data-help-label', 'data-help-position', 'data-help-ignore'],
+    attributeFilter: ['style','class','hidden','aria-label','aria-pressed','data-controls-visible','data-paint-state','data-simple-help','data-help-label','data-help-position','data-help-ignore'],
     childList: true,
     subtree: true,
   });
@@ -109,9 +112,10 @@ function setHelpActive(active) {
     addWatcher(window, 'resize', scheduleUpdateHandler, true);
     addWatcher(window, 'orientationchange', scheduleUpdateHandler, true);
     addWatcher(document, 'scroll', scheduleUpdateHandler, true);
-    startObserver();
+    startObserver();trackSimpleTargets();
     scheduleUpdate(true);
   } else {
+    cancelAnimationFrame(overlayState.trackingFrame);overlayState.trackingFrame=null;
     document.body.classList.remove('toy-help-mode');
     removeWatchers();
     stopObserver();
@@ -153,9 +157,20 @@ function scheduleUpdate(immediate = false) {
   });
 }
 
+function trackSimpleTargets(){
+ if(!overlayState.active||!uiMode.isSimple()||overlayState.trackingFrame!==null)return;
+ let previous=-Infinity;
+ const tick=time=>{overlayState.trackingFrame=null;if(!overlayState.active||!uiMode.isSimple())return;if(time-previous>=32){previous=time;renderOverlay();}overlayState.trackingFrame=requestAnimationFrame(tick);};
+ overlayState.trackingFrame=requestAnimationFrame(tick);
+}
+uiMode.subscribe(()=>{if(!overlayState.active)return;scheduleUpdate(true);trackSimpleTargets();});
+
 function renderOverlay() {
   if (!overlayState.active) return;
   const host = ensureHost();
+  const mode=uiMode.isSimple()?'simple':'advanced';
+  if(host.dataset.helpMode!==mode){host.replaceChildren();host.dataset.helpMode=mode;}
+  if(mode==='simple'){renderSimpleHelpLabels(host);return;}
 
   // Preserve the existing Controls callout so its animations aren't reset on rerender.
   const existingControls = host.querySelector('.toy-help-controls');

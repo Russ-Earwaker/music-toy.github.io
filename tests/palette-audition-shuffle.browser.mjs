@@ -35,7 +35,7 @@ try {
  await send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
  // The app already loads its local html2canvas vendor copy.
  await send('Network.setBlockedURLs',{urls:['*cdnjs.cloudflare.com*']});
- await send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/index.html`});
+ await send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/index.html?preset=simple-playtest`});
  for(let i=0;i<100;i++){if(await run('!!window.ContainerToys'))break;await new Promise(r=>setTimeout(r,100));}
  await new Promise(r=>setTimeout(r,700));
  await run("document.querySelector('.volume-setup-ok')?.click();window.ToySpawner.close();document.querySelector('.guide-launcher').style.display='none';document.querySelector('.palette-handle').click()");
@@ -46,6 +46,7 @@ try {
  const a=audio.ensureAudioContext().createAnalyser();a.fftSize=2048;audio.getToyGain('paint-palette-preview').connect(a);const data=new Float32Array(a.fftSize);
  window.qaAudioTimer=setInterval(()=>{a.getFloatTimeDomainData(data);for(const v of data)qaPeak=Math.max(qaPeak,Math.abs(v));},10);
  })()`);
+ assert.equal(await run('document.querySelector(".palette-handle span").textContent'),'SOUND');assert.equal(await run('!!document.querySelector("#paint-palette [data-tool=randomise]")'),false);assert.equal(await run('document.querySelector(".palette-shuffle span").textContent'),'Shuffle Sounds');assert.equal(await run('!!document.querySelector("#paint-palette [data-tool=eyedropper]")'),true);
  const baseline=await run('JSON.stringify(window.BoardObjects.snapshot())');
  const transportState="import('./src/transport-registry.js').then(m=>m.transportRegistry.list().map(o=>({id:o.id,tick:o.transport.currentTick,state:o.transport.state})))";
  const phase=await run(transportState);
@@ -65,9 +66,10 @@ try {
  await send('Input.dispatchMouseEvent',{type:'mousePressed',...first,button:'left',clickCount:1});await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:first.x+16,y:first.y,buttons:1});await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:first.x+16,y:first.y,button:'left',clickCount:1});
  assert.equal(await run('qaNotes.length'),7,'cancelled drag has no preview');
  assert.equal(await run('JSON.stringify(window.BoardObjects.snapshot())'),baseline,'audition leaves authored board untouched');
- assert.deepEqual(await run(transportState),phase);
+ const afterAudition=await run(transportState);assert.ok(afterAudition.every((t,i)=>t.state===phase[i].state&&t.tick>=phase[i].tick),'audition preserves running clocks');
  assert.ok(await run('qaPeak>0.00001'),'real audio reaches preview bus');
  console.log('Audio proof:',await run('JSON.stringify({notes:qaNotes.map(n=>({instrument:n.instrument,note:n.note})),peak:qaPeak,state:qaAudio.ensureAudioContext().state})'));
+ await click(await pointFor('#paint-palette [data-tool=eyedropper]'));await click(await pointFor('.simple-drum-pad'));assert.equal(await run('document.querySelector("#paint-palette").dataset.equipped'),'instrument');assert.ok(await run('[...document.querySelectorAll(".palette-well")].some(b=>b.getAttribute("aria-pressed")==="true"&&b.textContent.toUpperCase().includes("PIANO"))'));
  const beforeColour=await run("localStorage.getItem('rhythmake:instrument-colours')");
  await click(await pointFor('.palette-well'));await new Promise(r=>setTimeout(r,100));
  await click(await pointFor('.palette-shuffle'));

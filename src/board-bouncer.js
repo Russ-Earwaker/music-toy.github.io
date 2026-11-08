@@ -1,3 +1,4 @@
+import {BOARD_PAN_TOLERANCE} from './board-gesture-threshold.js';
 import {applyInstrumentColour} from './instrument-colours.js';
 import {BOUNCER_BASE_ORANGE,BOUNCER_IMPACT_ORANGE} from './bouncer-response-style.js';
 import {boardLaunch,predictCannonTrajectory,CANNON_BARREL_LENGTH,BALL_LAUNCH_SPEED} from './simple-bouncer-physics.js';
@@ -29,7 +30,7 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
   const ux=launch.vx/BALL_LAUNCH_SPEED,uy=launch.vy/BALL_LAUNCH_SPEED,x=launch.x+ux*CANNON_BARREL_LENGTH,y=launch.y+uy*CANNON_BARREL_LENGTH;
   aim.setAttribute('d',`M${launch.x} ${launch.y}L${x} ${y}m${-ux*20+uy*10} ${-uy*20-ux*10}L${x} ${y}l${-ux*20-uy*10} ${-uy*20+ux*10}`);
  }
- const nodes=new Map(),trails=new Map(),predictions=new Map();let armed=null,gesture=null,frame,lastRelevant=null,teaching=null;
+ const nodes=new Map(),trails=new Map(),predictions=new Map();let armed=null,gesture=null,frame,lastRelevant=null,teaching=null,stopCubeDrag=null;
  const hint=document.createElement('p');hint.className='bouncer-board-hint';hint.hidden=true;hint.setAttribute('role','status');document.body.append(hint);
  const show=text=>{hint.textContent=text;hint.hidden=false;};
  const relevant=()=>!!armed||objects.list().length>0;
@@ -42,7 +43,7 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
     node.addEventListener('keydown',e=>{e.stopPropagation();if(['cube','ball'].includes(o.kind)&&['Delete','Backspace'].includes(e.key)){e.preventDefault();cancel();objects.remove(o.id);}if(e.key==='Enter'&&o.kind==='ball')arm({ballId:o.id});});
     if(o.kind!=='ball')node.addEventListener('pointerdown',e=>startCube(e,o.id));root.append(node);nodes.set(o.id,node);
    }
-   node.dataset.ballMode=o.ballMode||'normal';node.textContent=o.kind==='ball'&&o.ballMode==='gravity'?'\u2193':'';
+   node.dataset.simpleHelp=o.kind==='cube'?'Drag this shape to move it.':(o.ballMode==='gravity'?'Drag to launch a falling ball.':'Drag to launch this ball.');node.dataset.ballMode=o.ballMode||'normal';node.textContent=o.kind==='ball'&&o.ballMode==='gravity'?'\u2193':'';
    node.setAttribute('aria-label',o.kind==='cube'?`${shapeDefinition(o.shapeType??'cube').label}, note ${o.sourceMidi}. Drag to move; Delete to remove.`:(o.ballMode==='gravity'?'Gravity Ball.':'Ball.')+' Drag to throw; Delete to remove.');node.title=node.getAttribute('aria-label');
    if(o.kind==='cube'){node.dataset.shapeType=o.shapeType??'cube';node.style.clipPath=shapeClip(o.shapeType??'cube');}
    const width=o.kind==='cube'?o.width:(o.radius||12)*2,height=o.kind==='cube'?o.height:(o.radius||12)*2;
@@ -51,12 +52,13 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
   const next=relevant();if(next!==lastRelevant){lastRelevant=next;onRelevant(next);}
  }
  function startCube(e,id){
-  e.stopPropagation();if(e.button>0)return;e.preventDefault();
-  const cube=objects.get(id),p=screenToWorld(e),node=nodes.get(id),offset={x:p.x-cube.x,y:p.y-cube.y};node.focus({preventScroll:true});node.setPointerCapture(e.pointerId);
-  objects.update(id,{drag:true});
-  const move=ev=>{if(ev.pointerId!==e.pointerId)return;const point=screenToWorld(ev);const next={x:point.x-offset.x,y:point.y-offset.y};objects.update(id,next);render();};
-  const end=ev=>{if(ev.pointerId!==e.pointerId)return;for(const t of ['pointerup','pointercancel','lostpointercapture'])node.removeEventListener(t,end);node.removeEventListener('pointermove',move);objects.update(id,{drag:false});};
-  node.addEventListener('pointermove',move);for(const t of ['pointerup','pointercancel','lostpointercapture'])node.addEventListener(t,end);
+  e.stopPropagation();if(e.button>0)return;e.preventDefault();stopCubeDrag?.();
+  const cube=objects.get(id),p=screenToWorld(e),node=nodes.get(id),offset={x:p.x-cube.x,y:p.y-cube.y};node.focus({preventScroll:true});
+  // Track on window so a whole-Shape drag continues outside its clipped surface.
+  objects.update(id,{drag:true});let moved=false;
+  const move=ev=>{if(ev.pointerId!==e.pointerId)return;if(!moved){moved=true;window.ToySpawner?.beginPanelDrag?.({panel:node,pointerId:e.pointerId,remove:()=>objects.remove(id)});}const point=screenToWorld(ev);const next={x:point.x-offset.x,y:point.y-offset.y};objects.update(id,next);render();window.ToySpawner?.updatePanelDrag?.({clientX:ev.clientX,clientY:ev.clientY});};
+  const end=ev=>{if(ev.pointerId!==e.pointerId)return;for(const t of ['pointerup','pointercancel'])window.removeEventListener(t,end);window.removeEventListener('pointermove',move);node.removeEventListener('lostpointercapture',end);stopCubeDrag=null;objects.update(id,{drag:false});if(moved)window.ToySpawner?.endPanelDrag?.({clientX:ev.clientX,clientY:ev.clientY,pointerId:ev.pointerId,canceled:ev.type!=='pointerup'});};
+  window.addEventListener('pointermove',move);for(const t of ['pointerup','pointercancel'])window.addEventListener(t,end);node.addEventListener('lostpointercapture',end);stopCubeDrag=()=>end({pointerId:e.pointerId,type:'pointercancel'});
  }
  function arm(options={}){
   if(!canInteract())return false;
@@ -69,7 +71,7 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
   updateModes();document.body.classList.add('bouncer-board-armed');hint.hidden=true;onRelevant(true);updateModes();return true;
  }
  function updateModes(){for(const type of ['ball','gravity','cube'])for(const button of document.querySelectorAll('[data-toy-type="physical-'+(type==='gravity'?'gravity-ball':type)+'"]')){const active=!!armed&&(armed.mode||'ball')===type;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));}}
- function cancel(){teaching?.dispose();teaching=null;gesture=null;armed=null;previewKey=null;creationPath.setAttribute('points','');updateModes();aim.setAttribute('d','');hint.hidden=true;document.body.classList.remove('bouncer-board-armed');}
+ function cancel(){stopCubeDrag?.();teaching?.dispose();teaching=null;gesture=null;armed=null;previewKey=null;creationPath.setAttribute('points','');updateModes();aim.setAttribute('d','');hint.hidden=true;document.body.classList.remove('bouncer-board-armed');}
  const swallow=e=>{e.preventDefault();e.stopImmediatePropagation();};
  function down(e){
   if(e.target.closest?.('.toy-spawner-art,.toy-spawner-logic,.toy-spawner-game,.palette-handle')){cancel();return;}
@@ -78,13 +80,14 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
   const ball=e.target.closest?.('.physical-ball'),cube=e.target.closest?.('.physical-cube');if(cube||e.target.closest?.('.cannon-aim,.cannon-barrel'))return;
   if(!ball&&!armed)return;
   if(!ball&&e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.heartbeat-toy,.container-toy'))return;
-  teaching?.dispose();teaching=null;swallow(e);unlock();ball?.focus({preventScroll:true});const point=screenToWorld(e),ballId=ball?.dataset.physicalId||armed?.ballId||null;
-  gesture={pointer:e.pointerId,start:point,current:point,ballId,containerId:armed?.containerId||null,shapeType:armed?.shapeType??'cube',mode:ball?(objects.get(ballId)?.ballMode==='gravity'?'gravity':'ball'):armed?.mode||'ball'};getViewport().setPointerCapture?.(e.pointerId);
+  // Empty-board Shape input also reaches the normal board pan coordinator.
+  teaching?.dispose();teaching=null;if(ball||armed?.mode!=='cube')swallow(e);unlock();ball?.focus({preventScroll:true});const point=screenToWorld(e),ballId=ball?.dataset.physicalId||armed?.ballId||null;
+  gesture={pointer:e.pointerId,start:point,current:point,ballId,containerId:armed?.containerId||null,shapeType:armed?.shapeType??'cube',screenStart:{x:e.clientX,y:e.clientY},panned:false,mode:ball?(objects.get(ballId)?.ballMode==='gravity'?'gravity':'ball'):armed?.mode||'ball'};if(gesture.mode!=='cube')getViewport().setPointerCapture?.(e.pointerId);
  }
- function move(e){if(e.pointerId!==gesture?.pointer)return;swallow(e);gesture.current=screenToWorld(e);updateCreationPreview();}
+ function move(e){if(e.pointerId!==gesture?.pointer)return;if(gesture.mode==='cube'){gesture.panned ||= Math.abs(e.clientX-gesture.screenStart.x)>BOARD_PAN_TOLERANCE||Math.abs(e.clientY-gesture.screenStart.y)>BOARD_PAN_TOLERANCE;return;}swallow(e);gesture.current=screenToWorld(e);updateCreationPreview();}
  async function up(e){
-  if(e.pointerId!==gesture?.pointer)return;swallow(e);const g=gesture,release=screenToWorld(e);gesture=null;previewKey=null;creationPath.setAttribute('points','');aim.setAttribute('d','');
-  if(g.mode==='cube'){if(Math.hypot(release.x-g.start.x,release.y-g.start.y)<6)objects.addCube(release.x,release.y,{shapeType:g.shapeType});return;}
+  if(e.pointerId!==gesture?.pointer)return;if(gesture.mode!=='cube')swallow(e);const g=gesture,release=screenToWorld(e);gesture=null;previewKey=null;creationPath.setAttribute('points','');aim.setAttribute('d','');
+  if(g.mode==='cube'){if(!g.panned&&Math.abs(e.clientX-g.screenStart.x)<=BOARD_PAN_TOLERANCE&&Math.abs(e.clientY-g.screenStart.y)<=BOARD_PAN_TOLERANCE)objects.addCube(release.x,release.y,{shapeType:g.shapeType});return;}
   if(Math.hypot(release.x-g.start.x,release.y-g.start.y)<6)return;
   const ball=objects.get(g.ballId)||objects.addBall(g.start.x,g.start.y,{ballMode:g.mode==='gravity'?'gravity':'normal'});
   const launch=launchFor({...g,ballId:ball.id},release);
@@ -123,7 +126,7 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
   frame=requestAnimationFrame(animate);
  }
  const escape=e=>{if(e.key==='Escape'&&(armed||gesture)){swallow(e);cancel();}};
- const lost=e=>{if(e.pointerId===gesture?.pointer)cancel();};
+ const lost=e=>{if(e.pointerId===gesture?.pointer&&gesture.mode!=='cube')cancel();};
  window.addEventListener('lostpointercapture',lost);
  window.addEventListener('pointerdown',down,true);window.addEventListener('pointermove',move,true);window.addEventListener('pointerup',up,true);
  window.addEventListener('pointercancel',cancel);window.addEventListener('blur',cancel);window.addEventListener('keydown',escape,true);

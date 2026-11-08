@@ -60,3 +60,24 @@ html[data-ui-mode="simple"] .connection-layer [data-active="1"] .connection-path
 
 .ui-mode-chrome[hidden] { display:none!important; }
 html:has(.ui-mode-chrome[hidden]) { --ui-mode-row-space:0px; }
+/* Simple hides the entire timing interface; Master Volume remains. */
+html[data-ui-mode="simple"] :is(#topbar-bpm-panel,#topbar .simple-tempo-control,#topbar [data-action="bpm"],#topbar [data-action="return-to-start"],.guide-launcher,.guide-task-highlighter,.heartbeat-play,#topbar [data-action="toggle-play"],#topbar [data-action="sound-theme"],#topbar-sound-theme-label,#topbar-sound-theme-panel,#sound-theme-overlay){display:none!important;pointer-events:none!important}
+
+html[data-ui-mode="simple"] #topbar .transport-controls{display:none!important}
+@media(max-width:720px){
+
+ html[data-ui-mode="simple"] #topbar .topbar-master-volwrap{min-width:0;width:100%;padding:4px;gap:4px}
+ html[data-ui-mode="simple"] #topbar .topbar-master-row{gap:4px}
+ html[data-ui-mode="simple"] #topbar .topbar-master-value{min-width:28px}
+ html[data-ui-mode="simple"] #topbar .topbar-master-slider{min-width:0;width:100%}
+}
+
+
+/* Temporary Simple scope: Art remains available in Advanced and in saved projects. */
+html[data-ui-mode="simple"] .toy-spawner-art{display:none!important;pointer-events:none!important}
+html[data-ui-mode="simple"] .toy-help-callout{max-width:220px;padding:6px 8px;border-radius:7px;font:600 11.5px/1.35 system-ui;box-shadow:0 3px 8px #0008;pointer-events:none!important}
+html[data-ui-mode="simple"] .toy-help-connector{opacity:.65;pointer-events:none!important}
+
+
+html[data-ui-mode="simple"] #topbar #topbar-master-volume:not(.is-in-setup){left:50%;transform:translateX(-50%);top:calc(var(--top-btn-offset) + var(--ui-mode-row-space,0px) + 48px)!important;width:374px;max-width:calc(100vw - 2 * var(--top-btn-offset) - 80px)}
+@media(max-width:720px){html[data-ui-mode="simple"] #topbar #topbar-master-volume:not(.is-in-setup){left:var(--top-btn-offset);transform:none;top:calc(var(--top-btn-offset) + var(--ui-mode-row-space,0px) + var(--top-btn-size) + 16px)!important;width:calc(100vw - 2 * var(--top-btn-offset) - 80px)}}

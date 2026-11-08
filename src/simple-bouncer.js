@@ -24,7 +24,7 @@ export function bouncerGridState(capture,id,instrument=DEFAULT_CANNON_INSTRUMENT
 }
 // Captures own ordinary musical toys, and reference independent physical IDs.
 export function createSimpleBouncerController({containers,objects=boardPhysicalObjects,getCollisionObjects=()=>objects.list('cube'),subscribeReceivers=()=>()=>{},onReceiverTrigger=()=>{},getToy,createGrid,applyGrid,removeGrid,publish,getTransport,cancelScheduled=()=>{},onChanged=()=>{},onPlay=()=>{}}){
- const throws=new Map(),pending=new Map();
+ const throws=new Map(),pending=new Map(),periodWrites=new Map();
  const receiverAdmissions=new Map();
  const receiverMap=()=>new Map(getCollisionObjects().map(body=>[body.id,body.boardObject||(body.capabilities?body:null)]));
  const gridState=(capture,id,instrument)=>{const receivers=receiverMap();return bouncerGridState(capture,id,instrument,id=>receivers.get(id));};
@@ -78,6 +78,26 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
   if(objects.get(d.ballId))objects.update(d.ballId,{instrument});onChanged();onPlay();return true;
  }
  function setBars(id,bars){const d=data(id);if(!d)return false;const next=clampBars(bars);if(d.bars===next)return true;d.bars=next;d.stale=!!d.capture;setData(id,d);return true;}
+ // Live period edits retain the shared-clock origin; they never rethrow the Ball.
+ async function setLoopPeriod(id,bars){
+  const d=data(id);if(!d)return false;const next=clampBars(bars);if(d.bars===next)return true;
+  d.bars=next;
+  if(d.capture){
+   const previous=d.capture,launch=d.stale?authoredLaunch(id,d):d.launch;
+   const capture={...simulateThrow({launch,cubes:getCollisionObjects(),bars:next,bpm:previous.bpm,ballMode:d.ballMode}),phaseOffsetTick:previous.phaseOffsetTick||0,firstLaunchTick:previous.firstLaunchTick};
+   d.launch=structuredClone(launch);d.capture=capture;d.stale=false;d.brokenReferences=[];d.cubeIds=[...new Set(capture.collisions.map(e=>e.cubeId))];
+   flights.delete(id);previews.delete(id);
+   const session=throws.get(id);if(session)session.duration=capture.durationTicks;
+  }
+  setData(id,d);
+  // Serialize resolution changes; a later click wins even while DrawGrid hydrates.
+  const job=(periodWrites.get(id)||Promise.resolve()).catch(()=>{}).then(async()=>{
+   const live=data(id);if(!live||live.bars!==next)return false;
+   const panel=panels(id)[0];if(panel&&live.capture){const state=gridState(live.capture,id,live.instrument);if(Number(panel.dataset.steps)!==state.steps)await applyGrid(panel,state);else writeMusic(panel,state);if(data(id)?.bars!==next)return false;publish(panel,'simple-bouncer-period');}
+   invalidateUpcoming(id);onChanged();return true;
+  });
+  periodWrites.set(id,job);try{return await job;}finally{if(periodWrites.get(id)===job)periodWrites.delete(id);}
+ }
  function clear(id){
   pending.delete(id);throws.delete(id);const previous=data(id),ball=objects.get(previous?.ballId);
   if(ball?.captureId===id)objects.update(ball.id,{captureId:null,captureToyId:null,motion:{vx:0,vy:0}});
@@ -319,5 +339,5 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
    if(objects.get(d.ballId))objects.update(d.ballId,{captureId:c.id,captureToyId:c.internalToyIds[0]||null,ballMode:d.ballMode,motion:{vx:0,vy:0}});
   }
  }
- return {scheduleReceiverHits,resetReceiverAdmissions:()=>receiverAdmissions.clear(),subscribe:fn=>containers.subscribe(fn),prediction,cubeResponses,handles,cannon,setAim,setInstrument,editHandle,create,data,panels,objects,recording,busy,setBars,clear,throwBall,view,ballView,migrateLegacy,resetSessions:()=>{pending.clear();throws.clear();previews.clear();flights.clear();syncHooks();},dispose:id=>{pending.delete(id);throws.delete(id);previews.delete(id);flights.delete(id);},destroy:()=>{offReceivers();unsubscribe();unsubscribeContainers();unsubscribeLifecycle();unsubscribeHooks();for(const h of hooks.values()){if(h.panel.__sequencerPatternAtTick===h.provider)h.panel.__sequencerPatternAtTick=h.original;delete h.panel.__simpleBouncerLive;}hooks.clear();}};
+ return {scheduleReceiverHits,resetReceiverAdmissions:()=>receiverAdmissions.clear(),subscribe:fn=>containers.subscribe(fn),prediction,cubeResponses,handles,cannon,setAim,setInstrument,editHandle,create,data,panels,objects,recording,busy,setBars,setLoopPeriod,clear,throwBall,view,ballView,migrateLegacy,resetSessions:()=>{pending.clear();throws.clear();previews.clear();flights.clear();syncHooks();},dispose:id=>{pending.delete(id);throws.delete(id);previews.delete(id);flights.delete(id);},destroy:()=>{offReceivers();unsubscribe();unsubscribeContainers();unsubscribeLifecycle();unsubscribeHooks();for(const h of hooks.values()){if(h.panel.__sequencerPatternAtTick===h.provider)h.panel.__sequencerPatternAtTick=h.original;delete h.panel.__simpleBouncerLive;}hooks.clear();}};
 }

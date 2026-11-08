@@ -1,3 +1,4 @@
+import {BOARD_PAN_TOLERANCE} from './board-gesture-threshold.js';
 // src/board-gestures.js
 import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoordinator.js';
 import { makeDebugLogger } from './debug-flags.js';
@@ -133,7 +134,7 @@ function __mtBindBoardGestures() {
     const endY = curY;
 
     const SCALE_EPS = 1e-4;
-    const POS_EPS = 0.5; // px tolerance before we treat as movement
+    const POS_EPS = BOARD_PAN_TOLERANCE; // px tolerance before we treat as movement
 
     const startScale = pinchState?.baseScale ?? dragStart?.scale ?? (zoom.currentScale ?? curScale);
     const startX = pinchState?.baseX ?? dragStart?.baseX ?? (zoom.currentX ?? curX);

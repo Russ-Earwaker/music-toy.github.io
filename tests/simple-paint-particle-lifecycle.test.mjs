@@ -4,20 +4,20 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {dom,Node,event} from './graph-ui-dom.mjs';
 import {prepareBoardDrawing} from '../src/simple-draw-placement.js';
-import {installPaintPresentation} from '../src/simple-paint/presentation/paint-presentation.js';
+import {installPaintPresentation,installProductionPaintPresentation} from '../src/simple-paint/presentation/paint-presentation.js';
 const source=readFileSync(new URL('../src/simple-draw-creation.js',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export function','function');
-function fixture(quality,camera={scale:.5,x:40,y:60}){
+function fixture(quality,camera={scale:.5,x:40,y:60},production=false){
  const {document,window}=dom(),board=new Node(),calls=[],commits=[];document.body.append(board);board.hasPointerCapture=()=>false;
  let particles=Object.fromEntries(['begin','move','release','stop'].map(k=>[k,(...args)=>calls.push([k,...args])]));
  if(quality){
   window.performance={now:()=>0};window.matchMedia=()=>({matches:false,addEventListener(){}});
   const spy=particles;
-  particles=installPaintPresentation({quality,document,window,worldToScreen:p=>({x:p.x*camera.scale+camera.x,y:p.y*camera.scale+camera.y}),getInstrument:()=> 'PIANO'},
+  particles=(production?installProductionPaintPresentation:installPaintPresentation)({quality,document,window,worldToScreen:p=>({x:p.x*camera.scale+camera.x,y:p.y*camera.scale+camera.y}),getInstrument:()=> 'PIANO'},
    {standard:()=>spy,loadHigh:async()=>({installHighPaintRenderer:()=>({consume(){},stop(){}})})});
  }
  const context={document,window,prepareBoardDrawing,createBoardInteractionHint:()=>({hide(){},dispose(){}})};vm.createContext(context);vm.runInContext(source+';globalThis.install=installSimpleDrawCreation;',context);
  const creation=context.install({getViewport:()=>board,getWorld:()=>board,screenToWorld:p=>({x:(p.x-camera.x)/camera.scale,y:(p.y-camera.y)/camera.scale}),particles,commit:async(p)=>{commits.push(p);}});
- const send=(type,x=100,y=100,target=board)=>window.dispatchEvent(event(type,x,y,{target,stopImmediatePropagation(){}}));
+ const send=(type,x=100,y=100,target=board,extra={})=>window.dispatchEvent(event(type,x,y,{target,stopImmediatePropagation(){},...extra}));
  return {creation,calls,commits,send,board};
 }
 test('real pointer lifecycle invokes effects only during drawing and commits identical source and bounds',()=>{
@@ -49,4 +49,16 @@ test('UI/scissors pointer events cannot start the field; cancel, Clear, scene ch
  const f=fixture();f.creation.arm();const button=new Node('button');f.board.append(button);f.send('pointerdown',100,100,button);assert.equal(f.calls.some(c=>c[0]==='begin'),false);
  f.send('pointerdown');f.creation.cancel();assert.equal(f.calls.at(-1)[0],'stop');f.creation.arm();f.send('pointerdown');f.send('scene:new');assert.equal(f.calls.at(-1)[0],'stop');assert.equal(f.creation.active,false);
  f.creation.arm();f.send('pointerdown');f.creation.stopParticles();assert.equal(f.calls.at(-1)[0],'stop');f.creation.cancel();f.send('pointermove');assert.equal(f.calls.at(-1)[0],'stop');
+});
+
+test('production Standard and High keep authored drawing identical with no medium lifecycle',()=>{
+ const inputs=[];for(const quality of ['standard','high']){
+  const f=fixture(quality,undefined,true);f.creation.arm();f.send('pointerdown',100,100);f.send('pointermove',220,160);f.send('pointerup',300,200);
+  assert.equal(f.commits.length,1);assert.equal(f.calls.length,0);inputs.push(f.commits[0]);
+ }
+ assert.deepEqual(inputs[0],inputs[1]);
+});
+test('held-stroke capture loss preserves window input; release still authors exactly once',()=>{
+ const f=fixture();f.creation.arm();f.send('pointerdown');f.send('lostpointercapture',100,100,f.board,{buttons:1});assert.equal(f.creation.active,true);
+ f.send('pointermove',200,150);f.send('pointerup',300,200);assert.equal(f.commits.length,1);assert.equal(f.creation.active,false);
 });

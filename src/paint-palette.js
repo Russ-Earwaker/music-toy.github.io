@@ -1,3 +1,4 @@
+import {uiMode} from './ui-mode.js';
 import {PAINT_TARGET_SELECTOR,resolvePaintTarget,paintInstrument} from './paint-target.js';
 import { createPaletteState, segmentHitsRect } from './paint-palette-state.js';
 import { instrumentColour, setInstrumentColour } from './instrument-colours.js';
@@ -9,10 +10,9 @@ import {auditionInstrument} from './instrument-audition.js';
 export function installPaintPalette() {
  if (document.getElementById('paint-palette')) return;
  const root = document.createElement('aside');
- root.id = 'paint-palette'; root.setAttribute('aria-label', 'Painter’s palette');
+ root.id = 'paint-palette';root.dataset.simpleHelp='Choose sounds to apply to toys.';root.dataset.simpleHelpGroup='true'; root.setAttribute('aria-label', uiMode.isSimple()?'Sound Palette':'Painter’s palette');
  root.innerHTML = `<button class="palette-handle" type="button" aria-expanded="false" title="Open painter’s palette">🎨<span>PAINT</span></button>
   <div class="palette-wells" hidden></div><div class="palette-tools" hidden>
-  <button type="button" data-tool="randomise" title="Randomise musical content">✧<span>Randomise</span></button>
   <button type="button" data-tool="eyedropper" title="Sample an instrument">◉<span>Eyedropper</span></button></div>
   <button type="button" class="palette-shuffle" title="Shuffle instruments" aria-label="Shuffle all six instruments" hidden>🎲<span>Shuffle</span></button>
   <p class="palette-hint" hidden>Hold a well to configure · Tap empty board to put down</p>`;
@@ -20,7 +20,7 @@ export function installPaintPalette() {
  const wells = root.querySelector('.palette-wells');
  const handle = root.querySelector('.palette-handle');
  const buttons = [];
- const palette = createPaletteState({ onChange: render });
+ const palette = createPaletteState({ onChange: render,allowRandomise:()=>!uiMode.isSimple() });
  let stroke = null, config = null, hold = null, swallowClickUntil = 0, suppressBoardClickUntil = 0;
  const name = id => getDisplayNameForId(id) || id || 'Empty well';
  let wasEquipped=false;
@@ -32,7 +32,7 @@ export function installPaintPalette() {
    const id = palette.state.slots[i];
    button.style.setProperty('--paint', id ? instrumentColour(id) : '#63534b');
    button.textContent = id ? name(id) : '+';
-   button.setAttribute('aria-label', `${name(id)} paint well ${i+1}. Hold to configure`);
+   button.setAttribute('aria-label', `${name(id)} ${uiMode.isSimple()?'sound':'paint'} well ${i+1}. Hold to configure`);
    button.title = `${name(id)} · Hold to configure`;
    button.setAttribute('aria-pressed', String(palette.state.activePaletteTool === 'instrument' && palette.state.activePaintSlot === i));
   });
@@ -76,7 +76,18 @@ export function installPaintPalette() {
   });
  }
  root.querySelectorAll('[data-tool]').forEach(button => button.addEventListener('click', () => palette.selectTool(button.dataset.tool)));
- const shuffle=root.querySelector('.palette-shuffle');
+ function syncMode(){
+  const simple=uiMode.isSimple();
+  root.setAttribute('aria-label',simple?'Sound Palette':'Painter’s palette');handle.title=simple?'Open Sound Palette':'Open painter’s palette';handle.querySelector('span').textContent=simple?'SOUND':'PAINT';
+  root.querySelector('.palette-hint').textContent=simple?'Hold a sound to configure · Tap empty board to put down':'Hold a well to configure · Tap empty board to put down';
+  const shuffleButton=root.querySelector('.palette-shuffle');shuffleButton.querySelector('span').textContent=simple?'Shuffle Sounds':'Shuffle';shuffleButton.title=simple?'Shuffle Sounds':'Shuffle instruments';shuffleButton.setAttribute('aria-label',simple?'Shuffle Sounds':'Shuffle all six instruments');
+  const random=root.querySelector('[data-tool="randomise"]');
+  if(simple){random?.remove();if(palette.state.activePaletteTool==='randomise')palette.clear();}
+  else if(!random){const button=document.createElement('button');button.type='button';button.dataset.tool='randomise';button.title='Randomise musical content';button.innerHTML='✧<span>Randomise</span>';button.onclick=()=>palette.selectTool('randomise');root.querySelector('.palette-tools').prepend(button);}
+  render();
+ }
+ uiMode.subscribe(syncMode);syncMode();
+ const shuffle=root.querySelector('.palette-shuffle');shuffle.dataset.simpleHelp='Fill the palette with a new set of sounds.';shuffle.dataset.simpleHelpDetail='true';const eyedropper=root.querySelector('[data-tool=eyedropper]');eyedropper.dataset.simpleHelp="Copy a toy's sound into the palette.";eyedropper.dataset.simpleHelpDetail='true';
  shuffle.addEventListener('click',async()=>{
   if(shuffle.disabled)return;shuffle.disabled=true;cancelHold();releaseStroke();palette.clear();
   try{
@@ -100,9 +111,9 @@ export function installPaintPalette() {
  function configure(index) {
   cancelHold(); closeConfig();
   const dialog = document.createElement('dialog'); dialog.className = 'palette-config'; config = dialog;
-  dialog.setAttribute('aria-label', `Configure paint well ${index+1}`);
+  dialog.setAttribute('aria-label', `Configure ${uiMode.isSimple()?'sound':'paint'} well ${index+1}`);
   dialog.dataset.instrument = palette.state.slots[index] || 'tone';
-  dialog.innerHTML = `<h2>Paint well ${index+1}</h2><button type="button" class="palette-choose">Choose instrument</button>
+  dialog.innerHTML = `<h2>${uiMode.isSimple()?'Sound':'Paint'} well ${index+1}</h2><button type="button" class="palette-choose">Choose instrument</button>
    <label>Instrument colour <input type="color"></label><p>Shared by every toy using this instrument.</p>
    <button type="button" class="palette-empty">Empty well</button><button type="button" class="palette-done">Done</button>`;
   document.body.appendChild(dialog); dialog.showModal();

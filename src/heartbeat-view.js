@@ -1,3 +1,4 @@
+import {uiMode} from './ui-mode.js';
 import { drawHeartbeatCore } from './heartbeat-core.js';
 import { getHeartbeatVisualPhase } from './heartbeat-visuals.js';
 import { clearVerticalSlot } from './graph-placement.js';
@@ -39,6 +40,7 @@ export function installHeartbeatView({ getWorld, getMainPoint, getSpawnPoint = g
           controls.append(transportControls);
           const play = document.createElement('button'); play.className = 'heartbeat-play'; transportControls.append(play);
           play.addEventListener('click', () => {
+            if(uiMode.isSimple())return;
             heartbeatModel.select(record.id);
             const transport = heartbeatModel.transport(record.id);
             if (transport.state === 'playing') transport.pause(); else transport.play();

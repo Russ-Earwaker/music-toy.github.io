@@ -269,7 +269,7 @@ export function stopAllActiveNodes(){
 }
 
 // Legacy exports address Main; all domains use the same tick mapping implementation.
-export function play(){ return mainClock.play(); }
+export function play(options){ return mainClock.play(options); }
 export function start(){ return play(); }
 export function pause(){ return mainClock.pause(); }
 export function stop(){ return pause(); }

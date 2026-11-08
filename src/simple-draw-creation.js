@@ -1,11 +1,11 @@
-import {installPaintPresentation} from './simple-paint/presentation/paint-presentation.js';
+import {installProductionPaintPresentation} from './simple-paint/presentation/paint-presentation.js';
 import {worldToScreen} from './board-viewport.js';
 import {prepareBoardDrawing} from './simple-draw-placement.js';
 import {createBoardInteractionHint} from './simple-interaction-hint.js';
 // Temporary input only: no graph object, notes, transport or persisted state.
 export function installSimpleDrawCreation({getViewport,getWorld,screenToWorld,commit,unlock=()=>{},canCreate=()=>true,onArm=()=>{},getInstrument=()=>'PIANO',particles=null}){
  let armed=false,pointer=null,points=[],overlay=null,path=null,heartbeatId,containerId,capped=false;
- particles ||= installPaintPresentation({worldToScreen,getInstrument:()=>getInstrument(containerId)});
+ particles ||= installProductionPaintPresentation({worldToScreen,getInstrument:()=>getInstrument(containerId)});
  let onboarding=null;
  const hint=document.createElement('p');hint.className='simple-draw-creation-hint';hint.hidden=true;hint.textContent='Draw on the board. Release to make a toy. Esc to cancel.';document.body.append(hint);
  function clear(){const captured=pointer;pointer=null;if(captured!==null&&getViewport()?.hasPointerCapture(captured))getViewport().releasePointerCapture(captured);overlay?.remove();overlay=path=null;points=[];capped=false;}
@@ -26,7 +26,8 @@ export function installSimpleDrawCreation({getViewport,getWorld,screenToWorld,co
  window.addEventListener('pointermove',move,true);
  window.addEventListener('pointerup',e=>{if(e.pointerId!==pointer)return;move(e);swallow(e);const prepared=prepareBoardDrawing(points);particles.release();clear();armed=false;hint.hidden=true;onboarding?.dispose();onboarding=null;document.body.classList.remove('simple-draw-creating');if(prepared)void commit(prepared,{heartbeatId,containerId}).catch(error=>{hint.textContent=error.message;hint.hidden=false;});},true);
  window.addEventListener('pointercancel',e=>{if(e.pointerId===pointer)cancel();},true);
- window.addEventListener('lostpointercapture',e=>{if(e.pointerId===pointer)cancel();},true);
+ // Board DOM updates can release capture during a held stroke; window input still owns it.
+ window.addEventListener('lostpointercapture',e=>{if(e.pointerId===pointer&&!e.buttons)cancel();},true);
  window.addEventListener('blur',cancel);
  window.addEventListener('keydown',e=>{if(armed&&e.key==='Escape'){swallow(e);cancel();}},true);
  window.addEventListener('scene:new',cancel);window.addEventListener('scene:load',cancel);

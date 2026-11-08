@@ -61,6 +61,7 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
    renderSurface(c.id,card.querySelector('.container-surface'));
    if(expressive){
     const strip=card.querySelector('.expressive-toy-controls'),tools=card.querySelector('.simple-draw-controls,.simple-bouncer-controls');
+    strip.dataset.simpleHelpGroup='true';strip.dataset.simpleHelp=c.presentation.type==='simple-draw'?(card.dataset.paintState==='AUTHORED_SCISSORS'?'Cut or restore notes in this melody.':'Draw on the board to make a melody.'):'Choose a sound and how often to repeat.';
     if(tools&&tools.parentElement!==strip)strip.prepend(tools);
     if(!card.__containerVolume){const volume=document.createElement('div');volume.className='art-toy-volume';strip.insertBefore(volume,card.querySelector('.container-actions'));card.__containerVolume=mountVolume(volume,card);}
     card.__containerVolume?.sync();

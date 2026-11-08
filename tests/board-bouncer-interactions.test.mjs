@@ -31,7 +31,7 @@ function fixture(){
  const board=installBoardBouncer({objects,controller,getWorld:()=>world,getViewport:()=>viewport,screenToWorld:e=>({x:e.clientX/2,y:e.clientY/2}),unlock(){},createCapture:async request=>{calls.push(request);handles.push({id:'capture:start',containerId:'capture',kind:'start',...request.launch},{id:'capture:target',containerId:'capture',kind:'target',...request.release});objects.update(request.ballId,{captureId:'capture'});}});
  const nodes=()=>world.children[0].children;
  const event=(target,x,y)=>({target,clientX:x,clientY:y,pointerId:1,button:0,preventDefault(){},stopPropagation(){},stopImmediatePropagation(){this.stopped=true;}});
- async function dispatch(type,target,x,y){const e=event(target,x,y);await win.dispatch(type,e);if(!e.stopped)await target.dispatch(type,e);}
+ async function dispatch(type,target,x,y){const e=event(target,x,y);e.type=type;await win.dispatch(type,e);if(!e.stopped)await target.dispatch(type,e);}
  const drag=async(target,a,b)=>{await dispatch('pointerdown',target,...a);await dispatch('pointermove',target,...b);await dispatch('pointerup',target,...b);};
  return {frame:()=>nextFrame?.(),controller,board,objects,calls,handles,nodes,world,drag,dispatch,dispose(){board.dispose();Object.assign(globalThis,old);}};
 }
@@ -165,5 +165,25 @@ test('all Shape renderers receive Ball, Gravity and Ripple hit feedback without 
    assert.equal(node.style['--cube-color'],'#ff8c00');assert.equal(f.objects.get(shape.id).instrument,undefined);
    responses.clear(ripple.id);controller.destroy();f.frame();assert.equal(Number(node.style['--cube-flash']),0);
   }
+ }finally{f.dispose();}
+});
+
+test('Shape empty-board input passes through to pan, never places after moving away and back',async()=>{
+ const f=fixture();try{
+  f.board.arm({mode:'cube',shapeType:'triangle'});
+  let passed=0;const off=e=>{if(!e.stopped)passed++;};window.addEventListener('pointerdown',off);window.addEventListener('pointermove',off);window.addEventListener('pointerup',off);
+  await f.dispatch('pointerdown',f.world,200,200);await f.dispatch('pointermove',f.world,400,300);await f.dispatch('pointermove',f.world,200,200);await f.dispatch('pointerup',f.world,200,200);
+  assert.equal(passed,4);assert.equal(f.objects.list('cube').length,0);assert.equal(f.board.activeShapeType,'triangle');
+  await f.drag(f.world,[200,200],[200,200]);assert.equal(f.objects.list('cube').length,1);
+ }finally{f.dispose();}
+});
+for(const shapeType of ['cube','circle','triangle','diamond','hexagon','star'])test(`${shapeType} uses shared drag-to-trash and canonical removal`,async()=>{
+ const f=fixture();try{
+  let active=null,hover=false,starts=0;
+  window.ToySpawner={beginPanelDrag:request=>{active=request;starts++;},updatePanelDrag:point=>{hover=point.clientX>800;},endPanelDrag:point=>{if(!point.canceled&&hover)active.remove();active=null;}};
+  const shape=f.objects.addCube(100,100,{shapeType}),node=f.nodes().find(n=>n.id===shape.id);
+  await f.drag(node,[200,200],[400,400]);assert.ok(f.objects.get(shape.id));assert.equal(starts,1);
+  f.board.arm({mode:'cube',shapeType});await f.drag(node,[400,400],[900,600]);assert.equal(hover,true);assert.equal(starts,2);
+  assert.equal(f.objects.get(shape.id),null);assert.equal(f.objects.list('cube').length,0);assert.ok(!f.nodes().some(n=>n.id===shape.id));assert.equal(f.board.activeShapeType,shapeType);
  }finally{f.dispose();}
 });

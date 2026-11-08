@@ -20,7 +20,7 @@ export function randomisePaintToy(panel) {
  return true;
 }
 
-export function createPaletteState({ storage = globalThis.localStorage, assign = assignPaintInstrument, randomise = randomisePaintToy, onChange = () => {} } = {}) {
+export function createPaletteState({ storage = globalThis.localStorage, assign = assignPaintInstrument, randomise = randomisePaintToy, onChange = () => {}, allowRandomise = () => true } = {}) {
  let slots = [...DEFAULT_PAINT_SLOTS];
  try {
   const saved = JSON.parse(storage?.getItem(PALETTE_KEY) || 'null');
@@ -38,7 +38,7 @@ export function createPaletteState({ storage = globalThis.localStorage, assign =
   state.activePaletteTool = 'instrument'; state.activePaintSlot = index; state.lastPaintSlot = index; onChange();
  };
  const selectTool = tool => {
-  if (!['randomise', 'eyedropper'].includes(tool)) return;
+  if (!['randomise', 'eyedropper'].includes(tool) || (tool==='randomise'&&!allowRandomise())) return;
   if (state.activePaletteTool === tool) { clear(); return; }
   state.activePaletteTool = tool; state.activePaintSlot = null; onChange();
  };
@@ -79,7 +79,7 @@ export function createPaletteState({ storage = globalThis.localStorage, assign =
    state.activePaletteTool = 'instrument'; state.activePaintSlot = index; state.lastPaintSlot = index; onChange();
    return true;
   }
-  if (state.activePaletteTool === 'randomise') return randomise(panel);
+  if (state.activePaletteTool === 'randomise') return allowRandomise()&&randomise(panel);
   return assign(panel, slots[state.activePaintSlot]);
  };
  return { state, clear, selectSlot, selectTool, configure, shuffle, paint, beginStroke: () => state.strokeVisitedToyIds.clear(), endStroke: () => state.strokeVisitedToyIds.clear() };

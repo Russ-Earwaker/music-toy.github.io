@@ -62,11 +62,11 @@ test('selecting entries invokes existing main creation/arming paths without cons
  f.calls.length=0;f.click('simple-string');assert.deepEqual(f.calls,[['string.arm','string']]);f.calls.length=0;f.click('simple-strum');assert.deepEqual(f.calls,[['string.arm','strum']]);
 });
 
-test('active creation mode is derived from existing state and survives rendering and Simple/Art switching',()=>{
+test('active creation mode is derived from existing state and survives rendering while Simple blocks the Art side route',()=>{
  const f=fixture();f.open();f.click('physical-ball');
  const active=()=>f.cards().filter(c=>c.getAttribute('aria-pressed')==='true').map(c=>c.dataset.toyType);
  assert.deepEqual(active(),['physical-ball']);f.window.ToySpawner.configure({});assert.deepEqual(active(),['physical-ball']);
- f.document.querySelector('.toy-spawner-art').dispatchEvent(event('click'));assert.equal(walk(f.menu,n=>n.tagName==='h3').length,0);assert.deepEqual(f.cards().map(c=>c.dataset.toyType),['flashCircle']);
+ f.document.querySelector('.toy-spawner-art').dispatchEvent(event('click'));assert.equal(walk(f.menu,n=>n.tagName==='h3').length,4);assert.deepEqual(active(),['physical-ball']);
  f.document.querySelector('.toy-spawner-toggle').dispatchEvent(event('click'));assert.deepEqual(active(),['physical-ball']);assert.equal(f.document.querySelector('.toy-spawner-art').getAttribute('aria-pressed'),'false');
  f.click('physical-gravity-ball');assert.deepEqual(active(),['physical-gravity-ball']);f.click('simple-ripple');assert.deepEqual(active(),['simple-ripple']);f.document.body.classList.remove('simple-ripple-armed');f.notify();assert.deepEqual(active(),[]);
  f.click('simple-draw');assert.deepEqual(active(),['simple-draw']);f.document.body.classList.remove('simple-draw-creating');f.notify();assert.deepEqual(active(),[]);
@@ -94,7 +94,7 @@ test('playtest offers exactly nine working actions, removes unavailable dock but
  assert.equal(f.window.ToySpawner.openAdvancedLogic(),false);
 });
 
-test('persistent Shape chooser opens without placement, switches, deselects and preserves active placement when closed',()=>{
+test('persistent Shape chooser opens without placement, switches, deselects and cancels active placement when closed',()=>{
  const f=fixture();f.click('physical-cube');
  assert.deepEqual(simpleShapes.map(s=>s.id),['cube','circle','triangle','diamond','hexagon','star']);
  assert.ok(f.menu.querySelector('.shape-palette'));assert.equal(f.calls.length,0);
@@ -104,8 +104,8 @@ test('persistent Shape chooser opens without placement, switches, deselects and 
  choose('cube');assert.ok(f.menu.querySelector('.shape-palette'));assert.deepEqual(selected(),['cube']);assert.equal(f.calls.length,2);
  choose('circle');assert.deepEqual(selected(),['circle']);assert.equal(f.window.BouncerBoard.activeShapeType,'circle');
  choose('circle');assert.deepEqual(selected(),[]);assert.equal(f.window.BouncerBoard.activeMode,null);assert.ok(f.menu.querySelector('.shape-palette'));
- choose('triangle');f.click('physical-cube');assert.equal(f.menu.querySelector('.shape-palette'),null);assert.equal(f.window.BouncerBoard.activeShapeType,'triangle');
- f.click('physical-cube');assert.deepEqual(selected(),['triangle']);
+ choose('triangle');f.click('physical-cube');assert.equal(f.menu.querySelector('.shape-palette'),null);assert.equal(f.window.BouncerBoard.activeShapeType,null);assert.equal(f.window.BouncerBoard.activeMode,null);
+ f.click('physical-cube');assert.deepEqual(selected(),[]);
  f.click('simple-ripple');assert.equal(f.menu.querySelector('.shape-palette'),null);assert.equal(f.window.BouncerBoard.activeMode,null);
  f.click('physical-cube');choose('star');f.window.dispatchEvent(event('keydown',0,0,{key:'Escape'}));assert.equal(f.window.BouncerBoard.activeMode,null);assert.equal(f.menu.querySelector('.shape-palette'),null);
 });
@@ -136,4 +136,18 @@ test('individual shape preset flags filter choices and canonical factory refuses
  assert.equal(f.context.createToyPanelAt('physical-cube',{shapeType:'circle'}),null);assert.equal(f.calls.length,0);
  const cubeDisabled=fixture({...config,simpleShapes:{...config.simpleShapes,cube:false}});
  assert.equal(cubeDisabled.context.createToyPanelAt('physical-cube'),null);assert.equal(cubeDisabled.calls.length,0);
+});
+
+test('closing the Toy Box or rebuilding its catalog clears Shape selection',()=>{
+ for(const close of [f=>f.window.ToySpawner.close(),f=>vm.runInContext('renderCatalog()',f.context)]){
+  const f=fixture();f.click('physical-cube');walk(f.menu.querySelector('.shape-palette'),n=>n.dataset.shapeType==='cube')[0].dispatchEvent(event('click'));
+  assert.equal(f.window.BouncerBoard.activeMode,'cube');close(f);assert.equal(f.window.BouncerBoard.activeMode,null);assert.equal(f.window.BouncerBoard.activeShapeType,null);
+  assert.equal(f.menu.querySelector('.shape-palette'),null);
+ }
+});
+
+test('Advanced Art remains available, then switching to Simple leaves the Music palette active',()=>{
+ const f=fixture();f.uiMode.set('advanced');f.document.querySelector('.toy-spawner-art').dispatchEvent(event('click'));
+ assert.deepEqual(f.cards().map(c=>c.dataset.toyType),['flashCircle']);assert.equal(f.document.querySelector('.toy-spawner-art').getAttribute('aria-pressed'),'true');
+ f.uiMode.set('simple');assert.equal(f.document.querySelector('.toy-spawner-art').getAttribute('aria-pressed'),'false');assert.ok(f.cards().some(c=>c.dataset.toyType==='simple-drum'));
 });

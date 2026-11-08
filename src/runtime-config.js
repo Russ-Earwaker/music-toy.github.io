@@ -45,3 +45,6 @@ export function canUsePalette(palette, config=features) {
  if(palette==='art') return config.systems.art;
  return !!config.creation[palette];
 }
+
+// Temporary production-only presentation switch; experiment renderers remain available.
+export const simplePaintDrawEffects = false;

@@ -1,3 +1,5 @@
+import {BOARD_PAN_TOLERANCE} from './board-gesture-threshold.js';
+import {createSimpleLoopPeriodButtons,syncSimpleLoopPeriodButtons} from './simple-loop-period-buttons.js';
 import {applyInstrumentColour} from './instrument-colours.js';
 import {drumRingPoint} from './simple-drum-ring.js';
 import {decorateCircularControl} from './circular-control.js';
@@ -39,15 +41,14 @@ export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,
     const card=document.createElement('section');card.id=o.id;card.className='simple-drum-object expressive-toy';card.setAttribute('aria-label','Simple Drum');card.dataset.controlsVisible='0';
     const handle=expressiveControl(document.createElement('button'),{kind:'drag',label:'Simple Drum controls'});handle.setAttribute('aria-expanded','false');card.append(handle);
     const pad=document.createElement('button');pad.type='button';pad.className='simple-drum-pad';pad.setAttribute('aria-label','Play drum');pad.title='Tap to add a looping hit; drag to move';pad.textContent='DRUM';card.append(pad);
-    const controls=document.createElement('div');controls.className='expressive-toy-controls simple-drum-controls';card.append(controls);
+    const controls=document.createElement('div');controls.className='expressive-toy-controls simple-drum-controls';controls.dataset.simpleHelp='Choose a sound and how often to repeat.';controls.dataset.simpleHelpGroup='true';card.append(controls);
     const instrument=decorateCircularControl(document.createElement('button'),{label:'Choose drum instrument',asset:'T_ButtonInstruments'}),name=document.createElement('span');name.className='drum-instrument-name';instrument.append(name);controls.append(instrument);
     let choosing=false;
     instrument.onclick=async()=>{if(choosing)return;choosing=true;try{const choice=await openInstrumentPicker({panel:card,toyId:o.id});if(choice&&objects.get(o.id))objects.update(o.id,{instrument:choice.value||choice});}finally{choosing=false;}};
     card.dataset.toyVolume=String(o.authoredState.volume);card.dataset.toyMuted=o.authoredState.muted?'1':'0';
     const volume=document.createElement('div');volume.className='art-toy-volume';controls.append(volume);installVolumeUI(volume,{panel:card});
-    const length=document.createElement('label');length.className='drum-period';length.textContent='Period';
-    const period=document.createElement('select');period.setAttribute('aria-label','Drum period');
-    for(let i=1;i<=4;i++){const option=document.createElement('option');option.value=String(i);option.textContent=i+(i===1?' loop':' loops');period.append(option);}period.onchange=()=>objects.update(o.id,{periodLoops:Number(period.value)});length.append(period);controls.append(length);
+
+    const period=createSimpleLoopPeriodButtons({value:o.authoredState.periodLoops,label:'Drum period',onChange:periodLoops=>objects.update(o.id,{periodLoops})});controls.append(period);
     const clear=expressiveControl(document.createElement('button'),{kind:'clear',label:'Clear Drum pattern'});clear.classList.add('drum-clear');clear.onclick=()=>controller.clearPattern(o.id);controls.append(clear);
     const ring=document.createElementNS('http://www.w3.org/2000/svg','svg');ring.setAttribute('viewBox','0 0 128 128');ring.setAttribute('aria-label','Drum recorded rhythm');ring.classList.add('drum-ring');card.append(ring);
     const gesture=onTap=>({getPosition:()=>objects.get(o.id)?.transform||o.transform,screenToWorld,canInteract,
@@ -62,7 +63,7 @@ export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,
     root.append(card);entry={card,pad,dispose(){offPad();offHandle();closeInstrumentPicker(card);entry.animation?.cancel();card.remove();}};cards.set(o.id,entry);
    }
    const {card}=entry;Object.assign(card.style,{left:o.transform.x+'px',top:o.transform.y+'px',width:DRUM_SIZE+'px',height:DRUM_SIZE+'px'});applyInstrumentColour(card,o.authoredState.instrument);entry.pad.textContent=o.authoredState.label;
-   card.querySelector('select').value=String(o.authoredState.periodLoops);
+   syncSimpleLoopPeriodButtons(card.querySelector('.simple-loop-period'),o.authoredState.periodLoops);
    const ring=card.querySelector('.drum-ring'),key=JSON.stringify([o.authoredState.periodLoops,o.authoredState.pattern.authoredNotes]);
    if(ring.dataset.pattern!==key){
     ring.dataset.pattern=key;ring.replaceChildren();
@@ -82,11 +83,12 @@ export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,
   if(e.target.closest?.('.toy-spawner-art,.toy-spawner-logic,.toy-spawner-game,.palette-handle')){cancel();return;}
   if(armed&&e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.container-toy,.heartbeat-toy,.simple-ripple-object,.simple-drum-object')){teaching?.dispose();teaching=null;}
   if(!armed||!canInteract()||e.button>0||placement||!getViewport().contains(e.target)||e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.container-toy,.heartbeat-toy,.simple-ripple-object,.simple-drum-object'))return;
-  teaching?.dispose();teaching=null;e.preventDefault();e.stopImmediatePropagation();placement={pointerId:e.pointerId,x:e.clientX,y:e.clientY};getViewport().setPointerCapture?.(e.pointerId);
+  teaching?.dispose();teaching=null;placement={pointerId:e.pointerId,x:e.clientX,y:e.clientY,panned:false};
  };
+ const move=e=>{if(e.pointerId===placement?.pointerId)placement.panned ||= Math.abs(e.clientX-placement.x)>BOARD_PAN_TOLERANCE||Math.abs(e.clientY-placement.y)>BOARD_PAN_TOLERANCE;};
  const up=e=>{
-  if(e.pointerId!==placement?.pointerId)return;const p=placement;placement=null;e.preventDefault();e.stopImmediatePropagation();
-  if(Math.hypot(e.clientX-p.x,e.clientY-p.y)<6)objects.create(screenToWorld({x:e.clientX,y:e.clientY}));
+  if(e.pointerId!==placement?.pointerId)return;const p=placement;placement=null;
+  if(!p.panned&&Math.abs(e.clientX-p.x)<=BOARD_PAN_TOLERANCE&&Math.abs(e.clientY-p.y)<=BOARD_PAN_TOLERANCE){objects.create(screenToWorld({x:e.clientX,y:e.clientY}));cancel();}
  };
  const interrupted=()=>{placement=null;};
  const escape=e=>{if(e.key==='Escape')cancel();};
@@ -94,7 +96,7 @@ export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,
  const off=objects.subscribe(()=>{render();onDirty();});
  const offHits=controller.subscribe?.(hit)||(()=>{});
  function animate(){for(const [id,entry]of cards){const phase=controller.phase(id),o=objects.get(id),p=drumRingPoint(phase.tick,o.authoredState.periodLoops);entry.playhead.setAttribute('cx',p.x);entry.playhead.setAttribute('cy',p.y);entry.playhead.dataset.tick=String(phase.tick);}frame=requestAnimationFrame(animate);}
- window.addEventListener('pointerdown',down,true);window.addEventListener('pointerup',up,true);window.addEventListener('pointercancel',interrupted);window.addEventListener('blur',cancel);window.addEventListener('keydown',escape);window.addEventListener('scene:new',cancel);window.addEventListener('scene:load',cancel);window.addEventListener('toy-volume',volumeChanged);window.addEventListener('toy-mute',volumeChanged);
+ window.addEventListener('pointerdown',down,true);window.addEventListener('pointermove',move,true);window.addEventListener('pointerup',up,true);window.addEventListener('pointercancel',interrupted);window.addEventListener('blur',cancel);window.addEventListener('keydown',escape);window.addEventListener('scene:new',cancel);window.addEventListener('scene:load',cancel);window.addEventListener('toy-volume',volumeChanged);window.addEventListener('toy-mute',volumeChanged);
  render();if(controller.phase)animate();
- return {arm,cancel,createSet(){if(!canInteract())return [];onArm();cancel();return createDrumSet(objects,triggerCreationPoint({viewport:getViewport(),screenToWorld}),getPlacementBounds?.());},get active(){return armed;},dispose(){cancel();off();offHits();if(frame)cancelAnimationFrame(frame);for(const entry of cards.values())entry.dispose();root.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',interrupted);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',escape);window.removeEventListener('scene:new',cancel);window.removeEventListener('scene:load',cancel);window.removeEventListener('toy-volume',volumeChanged);window.removeEventListener('toy-mute',volumeChanged);}};
+ return {arm,cancel,createSet(){if(!canInteract())return [];onArm();cancel();return createDrumSet(objects,triggerCreationPoint({viewport:getViewport(),screenToWorld}),getPlacementBounds?.());},get active(){return armed;},dispose(){cancel();off();offHits();if(frame)cancelAnimationFrame(frame);for(const entry of cards.values())entry.dispose();root.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',interrupted);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',escape);window.removeEventListener('scene:new',cancel);window.removeEventListener('scene:load',cancel);window.removeEventListener('toy-volume',volumeChanged);window.removeEventListener('toy-mute',volumeChanged);}};
 }

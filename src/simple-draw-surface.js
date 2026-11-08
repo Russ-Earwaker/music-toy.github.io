@@ -13,7 +13,7 @@ export function installSimpleDrawSurface(host,api,paintStore){
  const canvas=scene.querySelector('canvas'),ctx=canvas.getContext('2d'),status=scene.querySelector('[role=status]'),flashes=new Map();
  let active=false,frame=null,morph=null,disposed=false,lastState=null;
  const controlsRoot=scene.querySelector('.simple-draw-controls'),group=controlsRoot.querySelector('.free-play-lines');
- const clearButton=expressiveControl(scene.querySelector('[data-reset]'),{kind:'clear',label:'Clear'});
+ const clearButton=expressiveControl(scene.querySelector('[data-reset]'),{kind:'clear',label:'Clear'});clearButton.dataset.simpleHelp='Erase this drawing and melody.';
  const coilChrome=document.createElement('div');coilChrome.className='simple-draw-canvas-controls';canvas.parentElement.append(coilChrome);
  group.classList.add('simple-draw-scissors-actions');
  const geometry=()=>api.getGeometry?.()||{x:0,y:0,width:canvas.clientWidth,height:canvas.clientHeight};
@@ -30,7 +30,7 @@ export function installSimpleDrawSurface(host,api,paintStore){
   scissors.hidden=!view.scissors;scissors.setAttribute('aria-pressed',String(view.scissorsSelected));
   const drawButton=controlsRoot.querySelector('[data-tool="Draw"]');drawButton.hidden=!view.draw;drawButton.disabled=!view.draw;drawButton.setAttribute('aria-pressed',String(view.drawSelected));
   clearButton.hidden=!view.clear;
-  if(view.coil){const b=decorateCircularControl(document.createElement('button'),{label:line.straightened?'Coil':'Uncoil',icon:line.straightened?'coil':'straighten'});b.classList.add('art-toy-btn');b.onclick=()=>{const from=morphValue();api.setStraightened(line.id,!line.straightened);morph={from,to:line.straightened?0:1,at:performance.now()};tools.syncCoverage();controls();};coilChrome.append(b);}
+  if(view.coil){const b=decorateCircularControl(document.createElement('button'),{label:line.straightened?'Coil':'Uncoil',icon:line.straightened?'coil':'straighten'});b.dataset.simpleHelp='Stretch or restore the drawn melody.';b.classList.add('art-toy-btn');b.onclick=()=>{const from=morphValue();api.setStraightened(line.id,!line.straightened);morph={from,to:line.straightened?0:1,at:performance.now()};tools.syncCoverage();controls();};coilChrome.append(b);}
   tools.addContextActions(group,line);
  }
  controlsRoot.querySelector('[data-tool="Draw"]').onclick=()=>{if(state().draw&&!state().drawSelected){tools.selectDraw();api.armDraw?.();controls();}};

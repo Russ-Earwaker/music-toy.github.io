@@ -82,6 +82,7 @@ test('real circular ring projects canonical slots, playhead, Clear, and hit feed
  const f=fixture(2),environment=dom(),world=new Node(),viewport=new Node();viewport.append(world);environment.document.body.append(viewport);let frame,animations=0;
  const oldQuery=Node.prototype.querySelectorAll,oldAnimate=Node.prototype.animate;Node.prototype.querySelectorAll=function(selector){return walk(this,n=>n!==this&&n.matches(selector));};Node.prototype.animate=()=>{animations++;return {cancel(){}};};
  const context={...environment,applyInstrumentColour,drumRingPoint,DRUM_SIZE:104,requestAnimationFrame:fn=>{frame=fn;return 1;},cancelAnimationFrame(){},setToyVolume(){},setToyMuted(){},syncVolumeUI(){},installVolumeUI(){},decorateCircularControl:n=>n,expressiveControl:n=>n,installTapOrDrag:()=>()=>{},getDisplayNameForId:i=>i,closeInstrumentPicker(){},setExpressiveControlsVisible(){}};vm.createContext(context);
+ vm.runInContext(readFileSync(new URL('../src/simple-loop-period-buttons.js',import.meta.url),'utf8').replaceAll('export function','function'),context);
  const source=readFileSync(new URL('../src/simple-drum-board.js',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export function installSimpleDrumBoard','function installSimpleDrumBoard');const install=vm.runInContext(source+';installSimpleDrumBoard',context);
  let board;try{
   board=install({objects:f.objects,controller:f.controller,getWorld:()=>world,getViewport:()=>viewport,screenToWorld:p=>p,unlock(){}});
@@ -153,4 +154,23 @@ test('manual Drum admission records before autoplay, preserves phase/BPM and nev
 });
 test('a triggered Drum hit while stopped cannot start playback or author a pattern',async()=>{
  const f=fixture();await f.controller.trigger({receiverId:f.drum.id,when:0});assert.equal(f.t.state,'stopped');assert.equal(f.plays.length,0);assert.equal(f.events.length,1);assert.equal(f.events[0].activationSource,'trigger');assert.equal(f.objects.get(f.drum.id).authoredState.pattern.authoredNotes.length,0);f.controller.destroy();
+});
+
+test('single Drum placement exits creation, drags pass through to pan, and Drum Set stays one-shot',()=>{
+ const f=fixture(),environment=dom(),world=new Node(),viewport=new Node();viewport.append(world);environment.document.body.append(viewport);
+ const oldQuery=Node.prototype.querySelectorAll;Node.prototype.querySelectorAll=function(selector){return walk(this,n=>n!==this&&n.matches(selector));};
+ const context={...environment,BOARD_PAN_TOLERANCE:.5,applyInstrumentColour,drumRingPoint,DRUM_SIZE:104,requestAnimationFrame:()=>1,cancelAnimationFrame(){},setToyVolume(){},setToyMuted(){},syncVolumeUI(){},installVolumeUI(){},decorateCircularControl:n=>n,expressiveControl:n=>n,installTapOrDrag:()=>()=>{},getDisplayNameForId:i=>i,closeInstrumentPicker(){},setExpressiveControlsVisible(){},createBoardInteractionHint:()=>({dispose(){}}),SIMPLE_PLACE_HINT_DELAY:100,triggerCreationPoint:()=>({x:0,y:0}),createDrumSet};vm.createContext(context);
+ vm.runInContext(readFileSync(new URL('../src/simple-loop-period-buttons.js',import.meta.url),'utf8').replaceAll('export function','function'),context);
+ const source=readFileSync(new URL('../src/simple-drum-board.js',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export function installSimpleDrumBoard','function installSimpleDrumBoard');const install=vm.runInContext(source+';installSimpleDrumBoard',context);
+ const board=install({objects:f.objects,controller:f.controller,getWorld:()=>world,getViewport:()=>viewport,screenToWorld:p=>({x:p.x??p.clientX,y:p.y??p.clientY}),unlock(){}});
+ const send=(type,x,y)=>{const e={type,target:world,button:0,pointerId:1,clientX:x,clientY:y,preventDefault(){},stopImmediatePropagation(){this.stopped=true;}};environment.window.dispatchEvent(e);return e;};
+ try{
+  const before=f.objects.list().length;board.arm();assert.equal(board.active,true);
+  assert.equal(send('pointerdown',100,200).stopped,undefined);send('pointermove',300,300);send('pointermove',100,200);send('pointerup',100,200);
+  assert.equal(f.objects.list().length,before);assert.equal(board.active,true);
+  send('pointerdown',100,200);send('pointerup',100,200);assert.equal(f.objects.list().length,before+1);assert.equal(board.active,false);assert.equal(environment.document.body.classList.contains('simple-drum-armed'),false);
+  send('pointerdown',400,300);send('pointerup',400,300);assert.equal(f.objects.list().length,before+1);
+  board.arm();environment.window.dispatchEvent({type:'keydown',key:'Escape'});assert.equal(board.active,false);
+  board.arm();const kit=board.createSet();assert.equal(kit.length,6);assert.equal(board.active,false);
+ }finally{board.dispose();f.controller.destroy();Node.prototype.querySelectorAll=oldQuery;}
 });

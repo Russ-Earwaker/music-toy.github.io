@@ -30,8 +30,13 @@ export function createTickTransport({ id, getContext, ensureContext = getContext
         ticksPerBeat: 96, ticksPerBar: 384, beatsPerBar: 4,
         mapping: { originTick, originAudioTime, bpm: rate } };
     },
-    play() {
+    play({resumeAudio=true}={}) {
       if (state === 'playing') return Promise.resolve(false);
+      if(!resumeAudio){
+        // Logical playback can begin while browser autoplay keeps the audio clock suspended.
+        ++serial;pending=null;ensureContext();const fromState=state;rebase(retained);state='playing';
+        change({type:'play',fromState,positionTick:retained,audioTime:now()});return Promise.resolve(true);
+      }
       if (pending) return pending;
       const ctx = ensureContext(), token = ++serial;
       pending = Promise.resolve(ctx.state === 'suspended' ? ctx.resume() : undefined).then(() => {

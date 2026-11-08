@@ -11,7 +11,7 @@ export function arrangeExpressiveSecondaryControls(controls){
 // Art and content-sized containers share chrome; geometry remains owned by each toy.
 export function expressiveControl(button,{kind,label}={}){
  const asset={drag:'T_ButtonDrag',clear:'T_ButtonClear',enter:'T_ButtonEnter'}[kind];
- decorateCircularControl(button,{label,asset});
+ decorateCircularControl(button,{label,asset});if(kind==='drag')button.dataset.simpleHelp='Drag to move or tap for controls.';if(kind==='clear'){button.dataset.simpleHelp='Erase the recorded pattern.';button.dataset.simpleHelpDetail='true';}
  button.title={drag:'Drag / Show Controls',clear:'Clear',enter:'Enter Board'}[kind]||label;
  button.style.removeProperty('--c-btn-size');
  button.classList.add(kind==='drag'?'art-toy-drag-btn':'art-toy-btn',`art-toy-${kind==='enter'?'enter':kind}-btn`);

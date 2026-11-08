@@ -1,3 +1,4 @@
+import {uiMode} from './ui-mode.js';
 import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
 import { connectionModel } from './connections.js';
 import { orderCreationPanelRemoval } from './creation-graph.js';
@@ -124,6 +125,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     };
 
     const playFingerSnap = ()=>{
+      if(uiMode.isSimple())return;
       try{
         const bpmState = bar.__bpmState || {};
         if (!bpmState.open) return;
@@ -149,7 +151,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     };
 
     state.ensureFingerSnapBuffer = ensureFingerSnapBuffer;
-    state.playFingerSnap = ()=>{ try{ playFingerSnap(); }catch{} };
+    state.playFingerSnap = ()=>{if(uiMode.isSimple())return;try{playFingerSnap();}catch{} };
 
     const tick = ()=>{
       try{
@@ -255,7 +257,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     };
 
     state.raf = requestAnimationFrame(tick);
-    try{ ensureFingerSnapBuffer(); }catch{}
+    try{ if(!uiMode.isSimple())ensureFingerSnapBuffer(); }catch{}
   }
 
   function pauseTransportAndSyncUI(){
@@ -1407,7 +1409,7 @@ function ensureTopbar(){
 
     if (!bpmState.setOpen){
       bpmState.setOpen = (open)=>{
-        bpmState.open = !!open;
+        bpmState.open = !!open&&!uiMode.isSimple();
         const panel = bpmState.panel || bpmPanel;
         const btnRef = bpmState.btn || bpmBtn;
         if (!panel) return;
@@ -1427,7 +1429,7 @@ function ensureTopbar(){
           }catch{}
           try{
             resumeAudioContextIfNeeded().catch(()=>{});
-            bar.__bpmMetronomeAnimator?.ensureFingerSnapBuffer?.();
+            if(!uiMode.isSimple())bar.__bpmMetronomeAnimator?.ensureFingerSnapBuffer?.();
           }catch{}
           try{ bpmState.sync?.(); }catch{}
         } else {
@@ -1933,6 +1935,11 @@ if (document.readyState === 'loading') {
     if (!bar) return;
     if (window.__topbarWired) return;
     window.__topbarWired = true;
+    uiMode.subscribe(()=>{
+      bar.__bpmState?.close?.();if(bar.__bpmState)bar.__bpmState.btn=bar.querySelector('[data-action="bpm"]');
+      if(bar.__bpmMetronomeAnimator)bar.__bpmMetronomeAnimator.lastBpm=null;
+      if(uiMode.isSimple())bar.__soundThemeState?.close?.();
+    });
     try {
       window.SceneDiscardPrompt = {
         confirm: (message) => ensureDiscardSceneOverlay().__confirm?.(message),
@@ -1971,6 +1978,7 @@ if (document.readyState === 'loading') {
       if (!b) return;
 
       const action = b.dataset.action;
+      if(uiMode.isSimple()&&['toggle-play','return-to-start','bpm','simple-tempo','sound-theme','apply-sound-theme'].includes(action))return;
       const menuState = bar.__menuState;
       const bpmState = bar.__bpmState;
 
@@ -2250,7 +2258,7 @@ if (document.readyState === 'loading') {
 
     document.addEventListener('keydown', (e)=>{
 
-      if (window.tutorialSpacebarDisabled) return;
+      if (uiMode.isSimple() || window.tutorialSpacebarDisabled) return;
 
       if (e.code !== 'Space' && e.key !== ' ') return;
 

@@ -1,0 +1,15 @@
+{
+  "before": 40,
+  "after": 9,
+  "labels": [
+    "Drag toys here to delete them.",
+    "Zoom out to see the whole board.",
+    "Show or hide these explanations.",
+    "Create toys to use on the board.",
+    "Return to the board home view.",
+    "Choose sounds to apply to toys.",
+    "Copy a toy's sound into the palette.",
+    "Fill the palette with a new set of sounds.",
+    "Choose which shape to place on the board."
+  ]
+}

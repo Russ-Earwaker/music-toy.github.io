@@ -404,3 +404,21 @@ test('legacy Cannon pitch-only records recover surface contact from trajectory a
   f.transport.currentTick=Math.ceil(d.capture.collisions[0].timeSeconds*192);f.service.scheduleReceiverHits();assert.equal(received.length,1);assert.deepEqual(received[0].sourceMidis,[64,69,74]);assert.equal(received[0].lane,0);assert.equal(received[0].region,2);assert.equal(received[0].instrument,'PIANO');
  }finally{f.dispose();}
 });
+
+for(const ballMode of ['normal','gravity'])test(`${ballMode} live loop buttons preserve transport and launch phase, update future patterns and persist`,async()=>{
+ const f=fixture();try{
+  let plays=0;f.transport.play=async()=>{plays++;f.transport.state='playing';};
+  const c=f.create([],{ballMode});f.transport.currentTick=137;await f.capture(c.id);
+  const panel=f.service.panels(c.id)[0],before=structuredClone(f.service.data(c.id).capture),instance=getPlaybackInstance(panel.id),start=instance.startTick;
+  f.transport.currentTick=217;
+  for(const period of [2,3,4,1]){
+   assert.equal(await f.service.setLoopPeriod(c.id,period),true);const d=f.service.data(c.id);
+   assert.equal(d.bars,period);assert.equal(d.capture.durationTicks,period*384);assert.equal(toyLoopLengthTicks(panel),period*384);
+   assert.equal(d.capture.phaseOffsetTick,before.phaseOffsetTick);assert.equal(d.capture.firstLaunchTick,before.firstLaunchTick);
+   assert.equal(f.transport.currentTick,217);assert.equal(f.transport.state,'playing');assert.equal(plays,1);assert.equal(getPlaybackInstance(panel.id).startTick,start);
+   f.poll(217,217+period*384);assert.ok(f.calls.every(e=>Number.isFinite(e.tick)));
+  }
+  await Promise.all([1,4,3].map(n=>f.service.setLoopPeriod(c.id,n)));assert.equal(f.service.data(c.id).bars,3);assert.equal(toyLoopLengthTicks(panel),1152);const saved=structuredClone(f.containers.snapshot());f.containers.restore(saved);
+  assert.equal(f.service.data(c.id).bars,3);assert.equal(f.service.data(c.id).capture.durationTicks,1152);assert.equal(f.service.data(c.id).ballMode,ballMode);
+ }finally{f.dispose();}
+});

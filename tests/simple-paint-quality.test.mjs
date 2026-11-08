@@ -118,3 +118,15 @@ test('High renderer aligns marker, resizes framebuffer, shares surface and relea
  assert.equal(e.callbacks.size,0);assert.equal(e.canvases.at(-1).removed,true);assert.equal(releasedTargets.length,8);
 });
 
+
+import {installProductionPaintPresentation} from '../src/simple-paint/presentation/paint-presentation.js';
+import {simplePaintDrawEffects} from '../src/runtime-config.js';
+test('production Paint disables both experimental qualities without loading either renderer',async()=>{
+ assert.equal(simplePaintDrawEffects,false);
+ for(const quality of ['standard','high']){
+  let calls=0;const effect=installProductionPaintPresentation({quality},{standard:()=>{calls++;},loadHigh:()=>{calls++;}});
+  effect.begin({x:0,y:0});effect.move({x:30,y:40});effect.release();effect.stop();await effect.ready;
+  assert.equal(calls,0);assert.equal(effect.getProof().effectsEnabled,false);
+ }
+ const creation=readFileSync(new URL('../src/simple-draw-creation.js',import.meta.url),'utf8');assert.match(creation,/particles \|\|= installProductionPaintPresentation/);
+});

@@ -1,3 +1,4 @@
+import {createSimpleLoopPeriodButtons,syncSimpleLoopPeriodButtons} from './simple-loop-period-buttons.js';
 import {applyInstrumentColour} from './instrument-colours.js';
 import {decorateCircularControl} from './circular-control.js';
 import {expressiveControl,setExpressiveControlsVisible} from './expressive-toy-chrome.js';
@@ -24,16 +25,14 @@ export function installSimpleRippleBoard({objects,controller,getWorld,getViewpor
     card=document.createElement('section');card.id=o.id;card.className='simple-ripple-object expressive-toy';card.setAttribute('aria-label','Simple Ripple');card.dataset.controlsVisible='0';
     const handle=expressiveControl(document.createElement('button'),{kind:'drag',label:'Simple Ripple controls'});handle.setAttribute('aria-expanded','false');card.append(handle);
     const body=document.createElement('button');body.type='button';body.className='simple-ripple-trigger';body.setAttribute('aria-label','Ripple controls');body.title='Loops with Heartbeat';body.textContent='◎';body.onclick=()=>{void unlock();setExpressiveControlsVisible(card,card.dataset.controlsVisible!=='1');};card.append(body);
-    const controls=document.createElement('div');controls.className='expressive-toy-controls simple-ripple-controls';card.append(controls);
+    const controls=document.createElement('div');controls.className='expressive-toy-controls simple-ripple-controls';controls.dataset.simpleHelp='Choose a sound and how often to repeat.';controls.dataset.simpleHelpGroup='true';card.append(controls);
     const instrument=decorateCircularControl(document.createElement('button'),{label:'Choose ripple instrument',asset:'T_ButtonInstruments'}),name=document.createElement('span');name.className='ripple-instrument-name';instrument.append(name);controls.append(instrument);
     let choosing=false;
     instrument.onclick=async()=>{if(choosing)return;choosing=true;try{const choice=await openInstrumentPicker({panel:card,toyId:o.id});if(choice&&objects.get(o.id))objects.update(o.id,{instrument:choice.value||choice});}finally{choosing=false;}};
     card.dataset.toyVolume=String(o.authoredState.volume);card.dataset.toyMuted=o.authoredState.muted?'1':'0';
     const volume=document.createElement('div');volume.className='art-toy-volume';controls.append(volume);installVolumeUI(volume,{panel:card});
-    const length=document.createElement('label');length.className='ripple-length';length.textContent='Period';
-    const period=document.createElement('select');period.setAttribute('aria-label','Simple Ripple period');
-    for(let i=1;i<=4;i++){const option=document.createElement('option');option.value=String(i);option.textContent=i+(i===1?' loop':' loops');period.append(option);}
-    period.onchange=()=>objects.update(o.id,{periodLoops:Number(period.value)});length.append(period);controls.append(length);
+
+    const period=createSimpleLoopPeriodButtons({value:o.authoredState.periodLoops,label:'Simple Ripple period',onChange:periodLoops=>objects.update(o.id,{periodLoops})});controls.append(period);
     const toggle=()=>setExpressiveControlsVisible(card,card.dataset.controlsVisible!=='1');
     let suppressClick=false;
     handle.onclick=e=>{e.stopPropagation();if(!suppressClick||e.detail===0)toggle();suppressClick=false;};
@@ -54,7 +53,7 @@ export function installSimpleRippleBoard({objects,controller,getWorld,getViewpor
     root.append(card);cards.set(o.id,card);
    }
    Object.assign(card.style,{left:o.transform.x+'px',top:o.transform.y+'px',width:RIPPLE_SIZE+'px',height:RIPPLE_SIZE+'px'});applyInstrumentColour(card,o.authoredState.instrument);
-   card.querySelector('select').value=String(o.authoredState.periodLoops);
+   syncSimpleLoopPeriodButtons(card.querySelector('.simple-loop-period'),o.authoredState.periodLoops);
    card.querySelector('.ripple-instrument-name').textContent=getDisplayNameForId(o.authoredState.instrument)||o.authoredState.instrument;
    setToyVolume(o.id,o.authoredState.volume);setToyMuted(o.id,o.authoredState.muted);syncVolumeUI(card,{volume:o.authoredState.volume,muted:o.authoredState.muted});
   }

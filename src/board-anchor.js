@@ -464,7 +464,7 @@ function ensureMiniButton() {
   miniBtnEl.className = 'anchor-mini-btn';
   miniBtnEl.title = 'Return home';
   miniBtnEl.setAttribute('aria-label', 'Return home');
-  miniBtnEl.dataset.helpLabel = 'Return home';
+  miniBtnEl.dataset.helpLabel = 'Return home';miniBtnEl.dataset.simpleHelp='Return to the board home view.';
   miniBtnEl.dataset.helpPosition = 'left';
 
   // IMPORTANT: real HTML (no escaped entities)

@@ -117,3 +117,9 @@ test('integration wires screen-space UI, long press, empty-board clear, and scen
  assert.match(ui,/stroke.empty && !stroke.moved && !stroke.painted/);assert.match(ui,/if \(clear\) palette.clear\(\)/);
  assert.match(ui,/window.addEventListener\('scene:new',reset\)/);
 });
+
+test('Simple Sound Palette rejects Randomise state while preserving Eyedropper and Advanced randomisation',()=>{
+ const simple=createPaletteState({storage:null,allowRandomise:()=>false});simple.selectTool('randomise');assert.equal(simple.state.activePaletteTool,null);
+ simple.selectTool('eyedropper');assert.equal(simple.state.activePaletteTool,'eyedropper');
+ const advanced=createPaletteState({storage:null});advanced.selectTool('randomise');assert.equal(advanced.state.activePaletteTool,'randomise');
+});

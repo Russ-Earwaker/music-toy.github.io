@@ -1,4 +1,4 @@
-import {renderQuality} from '../../runtime-config.js';
+import {renderQuality,simplePaintDrawEffects} from '../../runtime-config.js';
 import {installPaintGestureParticles} from '../../simple-paint-particles.js';
 import {createPaintRenderState} from './paint-render-state.js';
 
@@ -59,3 +59,11 @@ export function installPaintPresentation(options={},dependencies={}) {
   get ready(){return loading??Promise.resolve();}};
 }
 
+
+// Production uses the existing SVG line feedback while medium experiments are disabled.
+// Experiments call installPaintPresentation directly and retain quality/backend selection.
+export function installProductionPaintPresentation(options={},dependencies={}){
+ if(simplePaintDrawEffects)return installPaintPresentation(options,dependencies);
+ const noop=()=>{};
+ return {begin:noop,move:noop,release:noop,stop:noop,refresh:noop,destroy:noop,ready:Promise.resolve(),getProof:()=>({effectsEnabled:false,effectiveQuality:'none'})};
+}

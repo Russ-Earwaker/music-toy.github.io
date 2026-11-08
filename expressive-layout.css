@@ -15,3 +15,9 @@
 .expressive-container>.expressive-structure{position:absolute;top:8px;right:14px;display:flex;gap:8px;z-index:4}
 .expressive-container>.expressive-structure[hidden],.expressive-container .expressive-handle[hidden]{display:none!important}
 .expressive-container[data-open="true"]>.expressive-structure{top:70px;left:14px;right:auto}
+.simple-loop-period{display:flex;flex-direction:column;gap:5px;font-size:11px;letter-spacing:.08em}
+.simple-loop-period-buttons{display:flex;gap:4px}
+.simple-loop-period-buttons button{flex:1;min-width:36px;min-height:40px;border:1px solid #788896;border-radius:8px;background:#25313e;color:#fff;font:inherit;cursor:pointer}
+.simple-loop-period-buttons button[aria-pressed="true"]{background:#e8f1f8;color:#142333;border:2px solid #fff;box-shadow:inset 0 -3px #586c7d;font-weight:700}
+.simple-loop-period-buttons button:focus-visible{outline:3px solid #8dd9ff;outline-offset:3px}
+.simple-loop-period-buttons button:disabled{opacity:.5;cursor:default}

@@ -122,12 +122,12 @@ function updatePaletteToggleUI() {
 }
 
 function togglePalette(palette) {
-  if (!canUsePalette(palette)) return;
+  if (!canUsePalette(palette)||(uiMode.isSimple()&&palette==='art')) return;
   const open = uiMode.isSimple() || !state.open || state.activePalette !== palette;
   setActivePalette(palette);setMenuOpen(open);
 }
 function setActivePalette(palette) {
-  if (!canUsePalette(palette)) return;
+  if (!canUsePalette(palette)||(uiMode.isSimple()&&palette==='art')) return;
   const next = palette === 'art'
     ? 'art'
     : (palette === 'game' ? 'game' : palette === 'logic' ? 'logic' : 'music');
@@ -196,7 +196,7 @@ function ensureDock() {
   trash.className = 'toy-spawner-trash c-btn';
   trash.setAttribute('aria-label', 'Delete Toy');
   trash.title = 'Delete Toy';
-  trash.dataset.helpLabel = 'Drag a toy here to delete it';
+  trash.dataset.helpLabel = 'Drag a toy here to delete it';trash.dataset.simpleHelp='Drag toys here to delete them.';
   trash.dataset.helpPosition = 'left';
   trash.innerHTML = BUTTON_ICON_HTML;
   const trashCore = trash.querySelector('.c-btn-core');
@@ -208,7 +208,7 @@ function ensureDock() {
   toggle.className = 'toy-spawner-toggle c-btn';
   toggle.setAttribute('aria-label', 'Create Toy');
   toggle.title = 'Create Toy';
-  toggle.dataset.helpLabel = 'Open the Add Toy menu';
+  toggle.dataset.helpLabel = 'Open the Add Toy menu';toggle.dataset.simpleHelp='Create toys to use on the board.';
   toggle.dataset.helpPosition = 'left';
   toggle.innerHTML = BUTTON_ICON_HTML;
   const toggleCore = toggle.querySelector('.c-btn-core');
@@ -257,7 +257,7 @@ function ensureDock() {
   overview.className = 'toy-spawner-overview c-btn';
   overview.setAttribute('aria-label', 'Toggle Overview');
   overview.title = 'Overview';
-  overview.dataset.helpLabel = 'Toggle overview mode';
+  overview.dataset.helpLabel = 'Toggle overview mode';overview.dataset.simpleHelp='Zoom out to see the whole board.';
   overview.dataset.helpPosition = 'left';
   overview.innerHTML = BUTTON_ICON_HTML;
   const overviewCore = overview.querySelector('.c-btn-core');
@@ -270,7 +270,7 @@ function ensureDock() {
   help.className = 'toy-spawner-help c-btn';
   help.setAttribute('aria-label', 'Toggle Help');
   help.title = 'Help';
-  help.dataset.helpLabel = 'Toggle help labels';
+  help.dataset.helpLabel = 'Toggle help labels';help.dataset.simpleHelp='Show or hide these explanations.';
   help.dataset.helpPosition = 'left';
   help.innerHTML = BUTTON_ICON_HTML;
   const helpCore = help.querySelector('.c-btn-core');
@@ -317,7 +317,7 @@ function ensureDock() {
       if (!caption) { caption = document.createElement('span'); caption.className = 'simple-palette-label'; button.append(caption); }
       caption.textContent = label;
     }
-    if (uiMode.isSimple() && !['music','art'].includes(state.activePalette)) setActivePalette('music');
+    if (uiMode.isSimple() && state.activePalette!=='music') setActivePalette('music');
     renderCatalog();
   };
   syncMode(); uiMode.subscribe(syncMode);
@@ -387,7 +387,8 @@ function ensureDock() {
 
 function setMenuOpen(open) {
   ensureDock();
-  state.open = !!open;
+  state.open = !!open;toggleSimpleBoxHelp();
+  if(!state.open)closeShapePalette();
   if(!state.open&&uiMode.isSimple()&&state.activePalette!=='music'){
     setActivePalette('music');renderCatalog();
   }
@@ -406,16 +407,16 @@ function renderCatalog() {
   if (!state.listHost) return;
   const catalog = safeCatalog();
   dbg('renderCatalog', state.activePalette, { count: catalog.length });
+  closeShapePalette();
   state.listHost.innerHTML = '';
   state.creationButtons=[];
   const grouped=uiMode.isSimple()&&state.activePalette==='music',hosts=new Map();
+  if(state.menu){state.menu.dataset.simpleHelp=grouped?'Create toys to use on the board.':'';state.menu.dataset.simpleHelpGroup='true';toggleSimpleBoxHelp();}
   state.menu?.setAttribute('role',grouped?'region':'menu');
   state.menu?.setAttribute('aria-label',grouped?'Simple Toy Box':'Create toy');
   state.menu?.classList.toggle('simple-music-grouped',grouped);
   state.listHost.classList.toggle('is-simple-grouped',grouped);
   state.menu?.querySelector('.toy-box-header')?.remove();
-  state.menu?.querySelector('.shape-palette')?.remove();
-  state.shapeButtons=[];
   if(grouped){
     const header=document.createElement('button');header.type='button';header.className='toy-box-header';
     header.textContent='♫  TOYS';header.setAttribute('aria-expanded',String(!state.menu.classList.contains('toy-box-collapsed')));
@@ -503,11 +504,13 @@ function activateCreationEntry(entry,options){
 }
 
 function closeShapePalette(){
+ if(state.menu?.querySelector('.shape-palette')&&state.creationButtons.some(({entry})=>entry.type==='physical-cube'&&entry.isCreationActive?.()))document.dispatchEvent(new CustomEvent('simple-creation:cancel'));
  state.menu?.querySelector('.shape-palette')?.remove();state.shapeButtons=[];
  for(const {card,entry}of state.creationButtons)if(entry.type==='physical-cube')card.setAttribute('aria-expanded','false');
+ syncCreationModeUI();
 }
 function openShapePalette(anchor,catalog){
-  const panel=document.createElement('section');panel.className='shape-palette';panel.setAttribute('aria-label','Shapes');
+  const panel=document.createElement('section');panel.className='shape-palette';panel.dataset.simpleHelp='Choose which shape to place on the board.';panel.dataset.simpleHelpGroup='true';panel.dataset.simpleHelpDetail='true';panel.setAttribute('aria-label','Shapes');
   const title=document.createElement('h3');title.textContent='SHAPES';panel.append(title);
   const grid=document.createElement('div');grid.className='shape-choices';panel.append(grid);
   const entry=catalog.find(item=>item.type==='physical-cube');if(!entry||!canCreateToy(entry.type))return;
@@ -527,6 +530,8 @@ function openShapePalette(anchor,catalog){
   const selected=state.shapeButtons.find(({button})=>button.getAttribute('aria-pressed')==='true');
   (selected?.button||panel.querySelector('button'))?.focus();
 }
+
+function toggleSimpleBoxHelp(){if(state.toggle)state.toggle.dataset.simpleHelp=state.open?'':'Create toys to use on the board.';}
 
 function syncCreationModeUI(){
   for(const {card,entry}of state.creationButtons){const active=!!entry.isCreationActive?.();card.classList.toggle('is-active',active);card.setAttribute('aria-pressed',String(active));}

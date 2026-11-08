@@ -103,6 +103,7 @@ import {boardPhysicalObjects} from './board-physical-objects.js';
 import {installBoardBouncer} from './board-bouncer.js';
 import {canCreateToy, canCreateBackingToy, canCreateShape} from './runtime-config.js';
 import {uiMode} from './ui-mode.js';
+import {installSimplePlayback} from './simple-playback.js';
 import {installSimpleDrawSurface} from './simple-draw-surface.js';
 import {installSimpleDrawCreation} from './simple-draw-creation.js';
 import {drawingAuthoredBounds} from './simple-draw-placement.js';
@@ -364,6 +365,7 @@ function dbgInternalOverlay(tag, overlay){
 installRafBoundaryFlag();
 
 installIOSAudioUnlock();
+installSimplePlayback({uiMode,registry:transportRegistry,document,window,unlock:resumeAudioContextIfNeeded});
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', installAudioDiagnostics, { once: true });
 } else {

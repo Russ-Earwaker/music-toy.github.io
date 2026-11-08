@@ -1,5 +1,7 @@
+import {uiMode} from './ui-mode.js';
+import {createSimpleLoopPeriodButtons,syncSimpleLoopPeriodButtons} from './simple-loop-period-buttons.js';
 import {applyInstrumentColour} from './instrument-colours.js';
-﻿import {decorateCircularControl} from './circular-control.js';
+import {decorateCircularControl} from './circular-control.js';
 import {openInstrumentPicker} from './instrument-picker.js';
 import {getDisplayNameForId} from './instrument-catalog.js';
 import {CANNON_BARREL_LENGTH} from './simple-bouncer-physics.js';
@@ -18,8 +20,13 @@ export function installSimpleBouncerSurface(host,{controller,id,arm,screenToWorl
  const instrumentName=document.createElement('span');instrumentName.className='cannon-instrument-name';instrument.append(instrumentName);
  let choosing=false;
  instrument.onclick=async()=>{if(choosing)return;choosing=true;try{card.dataset.instrument=controller.data(id).instrument;const internal=controller.panels(id)[0];const selected=await picker({panel:card,toyId:internal?.__audioToyId||internal?.id||id});if(selected&&controller.data(id))controller.setInstrument(id,selected.value||selected);}finally{choosing=false;}};
- const length=document.createElement('label');length.className='bouncer-length';length.append(document.createTextNode('Phrase length'));
- const bars=document.createElement('select');bars.setAttribute('aria-label','Simple Bouncer length');for(let i=1;i<=4;i++){const option=document.createElement('option');option.value=String(i);option.textContent=`${i} ${i===1?'bar':'bars'}`;bars.append(option);}length.append(bars);controls.append(length);bars.onchange=()=>{if(controller.setBars(id,Number(bars.value)))void controller.throwBall(id);};
+ const periodHost=document.createElement('div');periodHost.className='bouncer-period';controls.append(periodHost);let period=null,bars=null;
+ function syncPeriodMode(){
+  periodHost.replaceChildren();period=bars=null;
+  if(uiMode.isSimple()){period=createSimpleLoopPeriodButtons({value:controller.data(id)?.bars||1,label:'Ball loop period',onChange:value=>controller.setLoopPeriod(id,value)});periodHost.append(period);}
+  else{const length=document.createElement('label');length.className='bouncer-length';length.append(document.createTextNode('Phrase length'));bars=document.createElement('select');bars.setAttribute('aria-label','Simple Bouncer length');for(let i=1;i<=4;i++){const option=document.createElement('option');option.value=String(i);option.textContent=i+(i===1?' bar':' bars');bars.append(option);}length.append(bars);periodHost.append(length);bars.onchange=()=>{if(controller.setBars(id,Number(bars.value)))void controller.throwBall(id);};}
+  draw();
+ }
  controls.addEventListener('keydown',e=>e.stopPropagation());
  muzzle.addEventListener('pointerdown',e=>{
   e.stopPropagation();if(e.button>0)return;e.preventDefault();muzzle.setPointerCapture(e.pointerId);
@@ -29,11 +36,11 @@ export function installSimpleBouncerSurface(host,{controller,id,arm,screenToWorl
  });
  let active=false,disposed=false,frame;
  function draw(){if(disposed||!controller.data(id))return;const d=controller.data(id),c=controller.cannon(id);if(!c)return;
-  card.dataset.ballMode=d.ballMode||'normal';if(d.ballMode==='gravity'){card.setAttribute('aria-label','Gravity Cannon');card.querySelector('.simple-container-handle')?.setAttribute('aria-label','Gravity Cannon controls');}const ballLabel=d.ballMode==='gravity'?'Gravity Ball':'Ball';ball.setAttribute('aria-label',ballLabel);ball.title=ballLabel;ball.querySelector('.cannon-tool-label').textContent=ballLabel;ball.dataset.toyType=d.ballMode==='gravity'?'physical-gravity-ball':'physical-ball';ball.classList.toggle('gravity-ball-tool',d.ballMode==='gravity');muzzle.setAttribute('aria-label',d.ballMode==='gravity'?'Aim gravity cannon':'Aim cannon');
+  card.dataset.ballMode=d.ballMode||'normal';if(d.ballMode==='gravity'){card.setAttribute('aria-label','Gravity Cannon');card.querySelector('.simple-container-handle')?.setAttribute('aria-label','Gravity Cannon controls');}const ballLabel=d.ballMode==='gravity'?'Gravity Ball':'Ball';ball.setAttribute('aria-label',ballLabel);ball.title=ballLabel;ball.querySelector('.cannon-tool-label').textContent=ballLabel;ball.dataset.toyType=d.ballMode==='gravity'?'physical-gravity-ball':'physical-ball';ball.classList.toggle('gravity-ball-tool',d.ballMode==='gravity');muzzle.setAttribute('aria-label',d.ballMode==='gravity'?'Aim gravity cannon':'Aim cannon');muzzle.dataset.simpleHelp='Drag to aim the launch.';
   barrel.style.transform=`rotate(${Math.atan2(c.direction.y,c.direction.x)}rad)`;barrel.style.setProperty('--barrel-length',CANNON_BARREL_LENGTH+'px');
-  bars.value=String(d.bars);const name=getDisplayNameForId(d.instrument)||d.instrument;instrument.title=`Choose Instrument: ${name}`;instrumentName.textContent=name;applyInstrumentColour(card,d.instrument);
+  if(period)syncSimpleLoopPeriodButtons(period,d.bars);if(bars)bars.value=String(d.bars);const name=getDisplayNameForId(d.instrument)||d.instrument;instrument.title=`Choose Instrument: ${name}`;instrumentName.textContent=name;applyInstrumentColour(card,d.instrument);
  }
  function animate(){if(!active||disposed)return;draw();frame=requestAnimationFrame(animate);}
- const unsubscribe=controller.subscribe(draw);draw();
- return {setActive(value){if(active===value)return;active=value;if(active)animate();else cancelAnimationFrame(frame);},dispose(){disposed=true;unsubscribe();cancelAnimationFrame(frame);controls.remove();barrel.remove();}};
+ const unsubscribe=controller.subscribe(draw),offMode=uiMode.subscribe(syncPeriodMode);syncPeriodMode();
+ return {setActive(value){if(active===value)return;active=value;if(active)animate();else cancelAnimationFrame(frame);},dispose(){disposed=true;unsubscribe();offMode();cancelAnimationFrame(frame);controls.remove();barrel.remove();}};
 }
