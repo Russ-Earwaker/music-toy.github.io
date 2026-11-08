@@ -140,7 +140,9 @@ input, select, textarea, button {
 }
 
 /* Prevent any CSS transition/animation from fighting the atomic commit */
-.zoom-commit-freeze *, .zoom-commit-freeze *::before, .zoom-commit-freeze *::after {
+.zoom-commit-freeze :not(html[data-ui-mode="simple"] .toy-preview *),
+.zoom-commit-freeze :not(html[data-ui-mode="simple"] .toy-preview *)::before,
+.zoom-commit-freeze :not(html[data-ui-mode="simple"] .toy-preview *)::after {
   transition: none !important;
   animation: none !important;
   caret-color: transparent; /* avoids text repaint flicker on some iPads */

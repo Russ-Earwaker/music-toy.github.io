@@ -403,6 +403,15 @@ function setMenuOpen(open) {
   if(!state.open)document.dispatchEvent(new CustomEvent('toy-spawner:closed'));
 }
 
+// CSS animations share the document clock, including newly rebuilt previews.
+const initializedPreviewAnimations=new WeakSet();
+function syncPreviewPhase(){
+ const time=document.timeline?.currentTime;if(time==null)return;
+ for(const preview of state.menu?.querySelectorAll('.toy-preview')||[])for(const animation of preview.getAnimations?.({subtree:true})||[]){
+  if(initializedPreviewAnimations.has(animation))continue;
+  animation.currentTime=time;initializedPreviewAnimations.add(animation);
+ }
+}
 function renderCatalog() {
   if (!state.listHost) return;
   const catalog = safeCatalog();
@@ -411,7 +420,7 @@ function renderCatalog() {
   state.listHost.innerHTML = '';
   state.creationButtons=[];
   const grouped=uiMode.isSimple()&&state.activePalette==='music',hosts=new Map();
-  if(state.menu){state.menu.dataset.simpleHelp=grouped?'Create toys to use on the board.':'';state.menu.dataset.simpleHelpGroup='true';toggleSimpleBoxHelp();}
+  if(state.menu){state.menu.dataset.simpleHelp=grouped?'Create toys to use on the board.':'';state.menu.dataset.simpleHelpGroup='true';state.menu.dataset.helpPosition='top';state.menu.dataset.simpleHelpPlacement='preferred';toggleSimpleBoxHelp();}
   state.menu?.setAttribute('role',grouped?'region':'menu');
   state.menu?.setAttribute('aria-label',grouped?'Simple Toy Box':'Create toy');
   state.menu?.classList.toggle('simple-music-grouped',grouped);
@@ -424,7 +433,7 @@ function renderCatalog() {
     state.menu.prepend(header);
   }
   if(grouped)for(const group of simpleCreationGroups(catalog)){
-    const section=document.createElement('section');section.className='simple-creation-group';section.dataset.simpleCategory=group.id;section.setAttribute('role','group');
+    const section=document.createElement('section');section.className='simple-creation-group';section.dataset.simpleCategory=group.id;section.dataset.simpleHelp=({place:'Place shapes that trigger sound when hit.',trigger:'Place toys that trigger sounds.',loop:'Place toys that play on a loop.'})[group.id];section.dataset.simpleHelpDetail='true';section.dataset.helpPosition='left';section.dataset.simpleHelpPlacement='preferred';section.setAttribute('role','group');
     const heading=document.createElement('h3');heading.id=`simple-creation-${group.id}`;heading.textContent=group.label;section.setAttribute('aria-labelledby',heading.id);section.append(heading);
     const contents=document.createElement('div');contents.className='simple-creation-items';section.append(contents);hosts.set(group.id,contents);
     state.listHost.append(section);
@@ -534,6 +543,7 @@ function openShapePalette(anchor,catalog){
 function toggleSimpleBoxHelp(){if(state.toggle)state.toggle.dataset.simpleHelp=state.open?'':'Create toys to use on the board.';}
 
 function syncCreationModeUI(){
+ syncPreviewPhase();
   for(const {card,entry}of state.creationButtons){const active=!!entry.isCreationActive?.();card.classList.toggle('is-active',active);card.setAttribute('aria-pressed',String(active));}
   for(const {button,shape,entry}of state.shapeButtons){const active=!!entry.isCreationActive?.()&&entry.activeShapeType?.()===shape.id;button.setAttribute('aria-pressed',String(active));}
   const tool=state.creationButtons.find(({entry})=>entry.type==='physical-cube');

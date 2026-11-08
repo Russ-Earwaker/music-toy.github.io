@@ -49,12 +49,14 @@ try {
  assert.equal(await run('document.querySelector(".palette-handle span").textContent'),'SOUND');assert.equal(await run('!!document.querySelector("#paint-palette [data-tool=randomise]")'),false);assert.equal(await run('document.querySelector(".palette-shuffle span").textContent'),'Shuffle Sounds');assert.equal(await run('!!document.querySelector("#paint-palette [data-tool=eyedropper]")'),true);
  const baseline=await run('JSON.stringify(window.BoardObjects.snapshot())');
  const transportState="import('./src/transport-registry.js').then(m=>m.transportRegistry.list().map(o=>({id:o.id,tick:o.transport.currentTick,state:o.transport.state})))";
+ const assertLabels=async()=>assert.equal(await run(`import('./src/instrument-catalog.js').then(m=>JSON.parse(localStorage.getItem('rhythmake:paint-slots')||'null')?.every((id,i)=>document.querySelectorAll('.palette-well')[i].textContent===m.getInstrumentDisplayLabel(id))??[...document.querySelectorAll('.palette-well')].every((n,i)=>n.textContent===m.getInstrumentDisplayLabel(['PIANO','KALIMBA','SYNTH PLUCK LEAD SHORT','BELL','DRUM KICK','HI-HAT CLOSED'][i])))`),true);
+ await assertLabels();
  const phase=await run(transportState);
  const pointFor=selector=>run('(()=>{const r=document.querySelector('+JSON.stringify(selector)+').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()');
  const click=async point=>{await send('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:1});await send('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:1});};
  for(let i=0;i<6;i++){
   await click(await pointFor('.palette-well:nth-child('+(i+1)+')'));await new Promise(r=>setTimeout(r,160));
-  assert.equal(await run('qaNotes.length'),i+1,'one preview per tap');
+  await assertLabels();assert.equal(await run('qaNotes.length'),i+1,'one preview per tap');
   assert.equal(await run('document.querySelectorAll(".palette-well")['+i+'].getAttribute("aria-pressed")'),'true');
  }
  await click(await pointFor('.palette-well:nth-child(6)'));await new Promise(r=>setTimeout(r,100));
@@ -70,9 +72,21 @@ try {
  assert.ok(await run('qaPeak>0.00001'),'real audio reaches preview bus');
  console.log('Audio proof:',await run('JSON.stringify({notes:qaNotes.map(n=>({instrument:n.instrument,note:n.note})),peak:qaPeak,state:qaAudio.ensureAudioContext().state})'));
  await click(await pointFor('#paint-palette [data-tool=eyedropper]'));await click(await pointFor('.simple-drum-pad'));assert.equal(await run('document.querySelector("#paint-palette").dataset.equipped'),'instrument');assert.ok(await run('[...document.querySelectorAll(".palette-well")].some(b=>b.getAttribute("aria-pressed")==="true"&&b.textContent.toUpperCase().includes("PIANO"))'));
+ await assertLabels();
  const beforeColour=await run("localStorage.getItem('rhythmake:instrument-colours')");
  await click(await pointFor('.palette-well'));await new Promise(r=>setTimeout(r,100));
+ await run("window.shuffleStarts=0;document.querySelector('.palette-wells').addEventListener('animationstart',e=>{if(e.animationName.startsWith('palette-shuffle'))shuffleStarts++})");
  await click(await pointFor('.palette-shuffle'));
+ await new Promise(r=>setTimeout(r,400));
+ assert.equal(await run("document.querySelector('.palette-wells').classList.contains('is-shuffling')"),false,'completed Shuffle removes its animation trigger');
+ const shuffleStarts=await run('window.shuffleStarts');assert.ok(shuffleStarts>0,'Shuffle actually animates');
+ await send('Input.dispatchMouseEvent',{type:'mousePressed',x:800,y:250,button:'left',clickCount:1});
+ await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:860,y:290,buttons:1});
+ await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:860,y:290,button:'left',clickCount:1});
+ await run("document.documentElement.classList.add('zoom-commit-freeze')");await new Promise(r=>setTimeout(r,50));await run("document.documentElement.classList.remove('zoom-commit-freeze')");await new Promise(r=>setTimeout(r,100));
+ assert.equal(await run('window.shuffleStarts'),shuffleStarts,'pan/release and freeze do not replay completed Shuffle');
+ console.log('PASS completed Shuffle does not replay after board pan/release or zoom freeze');
+ await assertLabels();
  const slots=await run("JSON.parse(localStorage.getItem('rhythmake:paint-slots'))");assert.equal(new Set(slots).size,6);assert.equal(await run('document.querySelector("#paint-palette").dataset.equipped'),'');
  assert.equal(await run('qaNotes.length'),8,'Shuffle is silent');assert.equal(await run('JSON.stringify(window.BoardObjects.snapshot())'),baseline);
  assert.equal(await run("localStorage.getItem('rhythmake:instrument-colours')"),beforeColour);
@@ -80,6 +94,11 @@ try {
  await run("document.querySelector('.palette-well').dispatchEvent(new PointerEvent('pointerdown',{button:0,bubbles:true,clientX:50,clientY:500}))");await new Promise(r=>setTimeout(r,600));
  await run("const i=document.querySelector('.palette-config input');i.value='#5599bb';i.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.palette-done').click()");
  assert.equal(await run("document.querySelector('.palette-well').style.getPropertyValue('--paint')"),'#5599bb');
+ await run("document.querySelector('.palette-well').dispatchEvent(new PointerEvent('pointerdown',{button:0,bubbles:true,clientX:50,clientY:500}))");await new Promise(r=>setTimeout(r,600));
+ await run("document.querySelector('.palette-choose').click()");await new Promise(r=>setTimeout(r,500));
+ await run("document.querySelector('.inst-item[data-value=PIANO]').click();document.querySelector('[title=\"Apply instrument\"]').click()");await new Promise(r=>setTimeout(r,150));await run("document.querySelector('.palette-done').click()");await assertLabels();
+ slots[0]='PIANO';
+ console.log('PASS canonical labels after selection, deselection, eyedropper, shuffle and long-press instrument configuration');
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  assert.ok(await run("(()=>{const r=document.querySelector('.palette-shuffle').getBoundingClientRect();return r.width>=44&&r.height>=44&&r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight})()"));
  const shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(root,'artifacts/palette-shuffle-narrow.png'),Buffer.from(shot.data,'base64'));

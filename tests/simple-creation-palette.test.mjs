@@ -41,13 +41,13 @@ function fixture(config=features){
  return {document,window,uiMode,calls,context,menu,cards,click,notify:()=>changed(),open:()=>window.ToySpawner.open()};
 }
 
-test('actual registry metadata groups Cube, Ball/Gravity/Ripple, Paint and four PLAY toys, without legacy Bouncer duplication',()=>{
+test('actual registry metadata groups Cube, Ball/Gravity/Ripple, Paint and four musical LOOP toys, without legacy Bouncer duplication',()=>{
  const f=fixture(),groups=simpleCreationGroups(f.context.entries);
- assert.deepEqual(groups.map(g=>[g.label,Array.from(g.entries,e=>e.name)]),[['PLACE',['Cube']],['TRIGGER',['Ball','Gravity Ball','Ripple']],['LOOP',['Paint']],['PLAY',['Drum','Drum Set','String','Strum']]]);
- f.open();assert.deepEqual(walk(f.menu,n=>n.tagName==='h3').map(n=>n.textContent),['PLACE','TRIGGER','LOOP','PLAY']);
+ assert.deepEqual(groups.map(g=>[g.label,Array.from(g.entries,e=>e.name)]),[['PLACE',['Cube']],['TRIGGER',['Ball','Gravity Ball','Ripple']],['LOOP',['Paint','Drum','Drum Set','String','Strum']]]);
+ f.open();assert.deepEqual(walk(f.menu,n=>n.tagName==='h3').map(n=>n.textContent),['PLACE','TRIGGER','LOOP']);
  assert.deepEqual(f.cards().map(c=>c.getAttribute('aria-label')),['Shape','Ball','Gravity Ball','Ripple','Paint','Drum','Drum Set','String','Strum']);assert.equal(f.calls.length,0);
  for(const heading of walk(f.menu,n=>n.tagName==='h3'))heading.dispatchEvent(event('click'));assert.equal(f.calls.length,0);
- const play=walk(f.menu,n=>n.dataset.simpleCategory==='play')[0];assert.equal(walk(play,n=>n.tagName==='button').length,4);assert.equal(walk(play,n=>n.className==='simple-creation-empty').length,0);
+ assert.equal(walk(f.menu,n=>n.dataset.simpleCategory==='play').length,0);const loop=walk(f.menu,n=>n.dataset.simpleCategory==='loop')[0];assert.equal(walk(loop,n=>n.tagName==='button').length,5);
 });
 
 test('selecting entries invokes existing main creation/arming paths without constructing replacement toys',()=>{
@@ -66,7 +66,7 @@ test('active creation mode is derived from existing state and survives rendering
  const f=fixture();f.open();f.click('physical-ball');
  const active=()=>f.cards().filter(c=>c.getAttribute('aria-pressed')==='true').map(c=>c.dataset.toyType);
  assert.deepEqual(active(),['physical-ball']);f.window.ToySpawner.configure({});assert.deepEqual(active(),['physical-ball']);
- f.document.querySelector('.toy-spawner-art').dispatchEvent(event('click'));assert.equal(walk(f.menu,n=>n.tagName==='h3').length,4);assert.deepEqual(active(),['physical-ball']);
+ f.document.querySelector('.toy-spawner-art').dispatchEvent(event('click'));assert.equal(walk(f.menu,n=>n.tagName==='h3').length,3);assert.deepEqual(active(),['physical-ball']);
  f.document.querySelector('.toy-spawner-toggle').dispatchEvent(event('click'));assert.deepEqual(active(),['physical-ball']);assert.equal(f.document.querySelector('.toy-spawner-art').getAttribute('aria-pressed'),'false');
  f.click('physical-gravity-ball');assert.deepEqual(active(),['physical-gravity-ball']);f.click('simple-ripple');assert.deepEqual(active(),['simple-ripple']);f.document.body.classList.remove('simple-ripple-armed');f.notify();assert.deepEqual(active(),[]);
  f.click('simple-draw');assert.deepEqual(active(),['simple-draw']);f.document.body.classList.remove('simple-draw-creating');f.notify();assert.deepEqual(active(),[]);

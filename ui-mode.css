@@ -81,3 +81,7 @@ html[data-ui-mode="simple"] .toy-help-connector{opacity:.65;pointer-events:none!
 
 html[data-ui-mode="simple"] #topbar #topbar-master-volume:not(.is-in-setup){left:50%;transform:translateX(-50%);top:calc(var(--top-btn-offset) + var(--ui-mode-row-space,0px) + 48px)!important;width:374px;max-width:calc(100vw - 2 * var(--top-btn-offset) - 80px)}
 @media(max-width:720px){html[data-ui-mode="simple"] #topbar #topbar-master-volume:not(.is-in-setup){left:var(--top-btn-offset);transform:none;top:calc(var(--top-btn-offset) + var(--ui-mode-row-space,0px) + var(--top-btn-size) + 16px)!important;width:calc(100vw - 2 * var(--top-btn-offset) - 80px)}}
+
+html[data-ui-mode="simple"] .heartbeat-main .heartbeat-title{display:none}
+
+html[data-ui-mode="simple"] .toy-help-callout.sound-palette-help{max-width:min(340px,calc(100vw - 12px))}

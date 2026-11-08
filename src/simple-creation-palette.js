@@ -4,7 +4,7 @@ export const SIMPLE_CREATION_CATEGORIES=Object.freeze([
  {id:'place',label:'PLACE'},
  {id:'trigger',label:'TRIGGER'},
  {id:'loop',label:'LOOP'},
- {id:'play',label:'PLAY'},
+
 ]);
 export function simpleCreationGroups(entries){
  return SIMPLE_CREATION_CATEGORIES.map(category=>({...category,entries:entries.filter(entry=>entry.simpleCategory===category.id && canCreateToy(entry.type)).sort((a,b)=>(a.simpleOrder||0)-(b.simpleOrder||0))}));

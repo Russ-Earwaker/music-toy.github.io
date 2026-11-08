@@ -222,6 +222,15 @@ export function sampleNeedsReview(sample) {
 }
 
 export function getDisplayNameForId(id) { return ID_TO_DISPLAY_NAME.get(id); }
+// Palette display is independent of ID casing and catalogue load timing.
+export function getInstrumentDisplayLabel(id){
+ if(!id)return '';
+ const key=value=>String(value).trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ');
+ const exact=getDisplayNameForId(id);if(exact)return exact;
+ const normalized=key(id);
+ for(const [known,label]of ID_TO_DISPLAY_NAME)if(key(known)===normalized)return label;
+ return String(id).trim().replace(/_/g,' ').toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase());
+}
 export function getIdForDisplayName(displayName) { return DISPLAY_NAME_TO_ID.get(displayName); }
 export function getAllIds() { return Array.from(ID_TO_DISPLAY_NAME.keys()); }
 export function getInstrumentEntries() { return Array.from(LAST_ENTRIES); }

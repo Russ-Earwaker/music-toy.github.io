@@ -11,6 +11,7 @@ export function collectSimpleHelpTargets(root=document,win=window){
  const styles=new WeakMap(),style=n=>{if(!styles.has(n))styles.set(n,win.getComputedStyle(n));return styles.get(n);};
  const items=[];
  for(const target of root.querySelectorAll('[data-simple-help],[data-help-label]')){
+  if(target.dataset.simpleCategory==='loop'&&target.closest('.toy-spawner-menu')?.querySelector('.shape-palette'))continue;
   const label=simpleHelpLabel(target);if(!label||!target.isConnected)continue;
   let visible=true;
   for(let node=target;node;node=node.parentElement){
@@ -37,10 +38,10 @@ export function collectSimpleHelpTargets(root=document,win=window){
   const edgeRoot=target.closest('#paint-palette,.shape-palette,.toy-spawner-menu'),edge=edgeRoot?.getBoundingClientRect();
   let position=target.dataset.helpPosition||(target.closest('#paint-palette')?'right':target.closest('.toy-spawner-dock')?'left':target.closest('#topbar')?'bottom':'top');
   const chooser=edgeRoot?.querySelector?.('.shape-palette');
-  if(chooser&&edge&&win.innerWidth-edge.right>=100&&r.top>=chooser.getBoundingClientRect().top-24)position='right';
-  if(visible)items.push({target,label,edge:edge?{left:edge.left,right:edge.right}:null,rect:{left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height},position});
+  if(!target.dataset.helpPosition&&chooser&&edge&&win.innerWidth-edge.right>=100&&r.top>=chooser.getBoundingClientRect().top-24)position='right';
+  if(visible)items.push({target,label,edge:edge?{left:edge.left,right:edge.right}:null,rect:{left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height},position,preferred:target.dataset.simpleHelpPlacement==='preferred'});
  }
- return items;
+ return items.sort((a,b)=>Number(b.preferred&&b.position==='top')-Number(a.preferred&&a.position==='top'));
 }
 
 const area=(a,b)=>Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
@@ -48,14 +49,15 @@ export function placeSimpleHelpLabels(entries,width,height){
  const placed=[],margin=6,gap=8;
  for(const entry of entries){
   const r=entry.rect,w=Math.min(entry.width,width-2*margin),h=entry.height;let best=null;
-  for(const dir of [...new Set([entry.position,'top','bottom','left','right'])])for(const offset of [0,-24,24,-48,48,-80,80,-120,120,-180,180,-260,260]){
+  for(const dir of [...new Set([entry.position,'top','bottom','left','right'])])for(const offset of [0,-24,24,-48,48,-80,80,-120,120,-180,180,-260,260,-360,360,-480,480])for(const outward of (['left','right'].includes(dir)?[0,120,240,360]:[0])){
    const horizontal=dir==='top'||dir==='bottom';
    const preferredEdge=dir===entry.position?entry.edge:null;
    let left=horizontal?(r.left+r.right-w)/2+offset:dir==='left'?(preferredEdge?.left??r.left)-w-gap:(preferredEdge?.right??r.right)+gap;
+   if(!horizontal)left+=(dir==='left'?-outward:outward);
    let top=horizontal?(dir==='top'?r.top-h-gap:r.bottom+gap):(r.top+r.bottom-h)/2+offset;
    left=Math.max(margin,Math.min(width-margin-w,left));top=Math.max(margin,Math.min(height-margin-h,top));
    const box={left,top,right:left+w,bottom:top+h};
-   const cost=(dir===entry.position?0:16)+area(box,r)*60+placed.reduce((n,p)=>n+area(box,p.box)*30,0)+entries.reduce((n,e)=>n+(e===entry?0:area(box,e.rect)*3),0)+Math.hypot(left+w/2-(r.left+r.right)/2,top+h/2-(r.top+r.bottom)/2)*.08;
+   const cost=(entry.preferred?Math.abs(offset)*.3:0)+(dir===entry.position?0:entry.preferred?100000:16)+area(box,r)*60+placed.reduce((n,p)=>n+area(box,p.box)*30,0)+entries.reduce((n,e)=>n+(e===entry?0:area(box,e.rect)*100),0)+Math.hypot(left+w/2-(r.left+r.right)/2,top+h/2-(r.top+r.bottom)/2)*.08;
    if(!best||cost<best.cost)best={box,dir,cost};
   }
   placed.push({...best,entry});
@@ -73,7 +75,7 @@ export function renderSimpleHelpLabels(host,root=document,win=window){
   let nodes=session.nodes.get(entry.target);
   if(!nodes||nodes.callout.parentElement!==host){
    const callout=root.createElement('div'),connector=root.createElement('div');callout.className='toy-help-callout';connector.className='toy-help-connector';
-   callout.style.pointerEvents=connector.style.pointerEvents='none';callout.__helpTarget=connector.__helpTarget=entry.target;
+   callout.style.pointerEvents=connector.style.pointerEvents='none';callout.classList.toggle('sound-palette-help',entry.target.id==='paint-palette');callout.__helpTarget=connector.__helpTarget=entry.target;
    host.append(connector,callout);nodes={callout,connector};session.nodes.set(entry.target,nodes);changed=true;
   }
   if(nodes.callout.textContent!==entry.label){nodes.callout.textContent=entry.label;changed=true;}

@@ -1,13 +1,16 @@
 {
   "before": 40,
-  "after": 9,
+  "after": 12,
   "labels": [
+    "Create toys to use on the board.",
+    "Tap a sound to select it, then tap or swipe over toys to apply it. Tap empty space to put it down.",
     "Drag toys here to delete them.",
     "Zoom out to see the whole board.",
     "Show or hide these explanations.",
-    "Create toys to use on the board.",
+    "Place shapes that trigger sound when hit.",
+    "Place toys that trigger sounds.",
     "Return to the board home view.",
-    "Choose sounds to apply to toys.",
+    "Tap and hold a sound to choose a different sound.",
     "Copy a toy's sound into the palette.",
     "Fill the palette with a new set of sounds.",
     "Choose which shape to place on the board."

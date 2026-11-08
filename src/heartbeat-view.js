@@ -28,7 +28,7 @@ export function installHeartbeatView({ getWorld, getMainPoint, getSpawnPoint = g
       let el = elements.get(record.id);
       if (!el) {
         el = document.createElement('div'); el.className = record.id===MAIN_TRANSPORT_ID?'heartbeat-toy heartbeat-main':'heartbeat-toy'; el.dataset.heartbeatId = record.id;
-        const title = document.createElement('strong'); title.textContent = record.id===MAIN_TRANSPORT_ID ? 'Heartbeat · Main' : record.name; el.append(title);
+        const title = document.createElement('strong');title.className='heartbeat-title'; title.textContent = record.id===MAIN_TRANSPORT_ID ? 'Heartbeat · Main' : record.name; el.append(title);
         if(record.id===MAIN_TRANSPORT_ID){
           const canvas=document.createElement('canvas');canvas.className='heartbeat-core';canvas.width=canvas.height=1024;
           canvas.setAttribute('aria-hidden','true');el.append(canvas);

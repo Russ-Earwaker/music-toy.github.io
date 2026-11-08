@@ -42,3 +42,13 @@ test('opaque screen UI suppresses covered board labels without hiding its own ta
  const t=node('Shape');t.contains=()=>false;const e=environment([t]);e.root.elementFromPoint=()=>({closest:()=>({contains:()=>false})});assert.deepEqual(collectSimpleHelpTargets(e.root,e.win),[]);
  e.root.elementFromPoint=()=>({closest:()=>({contains:()=>true})});assert.equal(collectSimpleHelpTargets(e.root,e.win).length,1);
 });
+
+test('panel and category descriptions retain deliberate connector directions around a submenu',()=>{
+ const main={rect:{left:800,right:1040,top:400,bottom:850},width:184,height:30,position:'top',preferred:true};
+ const category={rect:{left:810,right:1030,top:680,bottom:840},width:175,height:30,position:'left',preferred:true};
+ const submenu={rect:{left:550,right:790,top:660,bottom:850},width:200,height:40,position:'left'};
+ const p=placeSimpleHelpLabels([main,category,submenu],1200,900);
+ assert.equal(p[0].dir,'top');assert.ok(p[0].box.bottom<main.rect.top);
+ assert.equal(p[1].dir,'left');assert.ok(p[1].box.right<category.rect.left);
+ assert.ok(p[1].box.right<=submenu.rect.left||p[1].box.bottom<=submenu.rect.top||p[1].box.top>=submenu.rect.bottom);
+});

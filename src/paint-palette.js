@@ -3,26 +3,26 @@ import {PAINT_TARGET_SELECTOR,resolvePaintTarget,paintInstrument} from './paint-
 import { createPaletteState, segmentHitsRect } from './paint-palette-state.js';
 import { instrumentColour, setInstrumentColour } from './instrument-colours.js';
 import { openInstrumentPicker, closeInstrumentPicker } from './instrument-picker.js';
-import { getDisplayNameForId,getInstrumentEntries,loadInstrumentEntries } from './instrument-catalog.js';
+import { getInstrumentDisplayLabel,getInstrumentEntries,loadInstrumentEntries } from './instrument-catalog.js';
 import {getSoundThemeKey} from './sound-theme.js';
 import {auditionInstrument} from './instrument-audition.js';
 
 export function installPaintPalette() {
  if (document.getElementById('paint-palette')) return;
  const root = document.createElement('aside');
- root.id = 'paint-palette';root.dataset.simpleHelp='Choose sounds to apply to toys.';root.dataset.simpleHelpGroup='true'; root.setAttribute('aria-label', uiMode.isSimple()?'Sound Palette':'Painter’s palette');
+ root.id = 'paint-palette';root.dataset.simpleHelp='Tap a sound to select it, then tap or swipe over toys to apply it. Tap empty space to put it down.';root.dataset.simpleHelpGroup='true';root.dataset.helpPosition='top';root.dataset.simpleHelpPlacement='preferred'; root.setAttribute('aria-label', uiMode.isSimple()?'Sound Palette':'Painter’s palette');
  root.innerHTML = `<button class="palette-handle" type="button" aria-expanded="false" title="Open painter’s palette">🎨<span>PAINT</span></button>
   <div class="palette-wells" hidden></div><div class="palette-tools" hidden>
   <button type="button" data-tool="eyedropper" title="Sample an instrument">◉<span>Eyedropper</span></button></div>
   <button type="button" class="palette-shuffle" title="Shuffle instruments" aria-label="Shuffle all six instruments" hidden>🎲<span>Shuffle</span></button>
   <p class="palette-hint" hidden>Hold a well to configure · Tap empty board to put down</p>`;
  document.body.appendChild(root);
- const wells = root.querySelector('.palette-wells');
+ const wells = root.querySelector('.palette-wells');wells.dataset.simpleHelp='Tap and hold a sound to choose a different sound.';wells.dataset.simpleHelpDetail='true';wells.dataset.helpPosition='right';
  const handle = root.querySelector('.palette-handle');
  const buttons = [];
  const palette = createPaletteState({ onChange: render,allowRandomise:()=>!uiMode.isSimple() });
  let stroke = null, config = null, hold = null, swallowClickUntil = 0, suppressBoardClickUntil = 0;
- const name = id => getDisplayNameForId(id) || id || 'Empty well';
+ const name = id => getInstrumentDisplayLabel(id) || 'Empty well';
  let wasEquipped=false;
  function render() {
   const equipped=!!palette.state.activePaletteTool;
@@ -87,13 +87,21 @@ export function installPaintPalette() {
   render();
  }
  uiMode.subscribe(syncMode);syncMode();
+ void loadInstrumentEntries().then(render);
+ let shuffleEffectTimer;
+ const finishShuffleEffect=()=>{clearTimeout(shuffleEffectTimer);wells.classList.remove('is-shuffling');};
+ for(const type of ['animationend','animationcancel'])wells.addEventListener(type,event=>{
+  if(event.animationName==='palette-shuffle'||event.animationName==='palette-shuffle-fade')finishShuffleEffect();
+ });
  const shuffle=root.querySelector('.palette-shuffle');shuffle.dataset.simpleHelp='Fill the palette with a new set of sounds.';shuffle.dataset.simpleHelpDetail='true';const eyedropper=root.querySelector('[data-tool=eyedropper]');eyedropper.dataset.simpleHelp="Copy a toy's sound into the palette.";eyedropper.dataset.simpleHelpDetail='true';
  shuffle.addEventListener('click',async()=>{
   if(shuffle.disabled)return;shuffle.disabled=true;cancelHold();releaseStroke();palette.clear();
   try{
    const entries=getInstrumentEntries();
    if(palette.shuffle(entries.length?entries:await loadInstrumentEntries(),getSoundThemeKey())){
-    wells.classList.remove('is-shuffling');void wells.offsetWidth;wells.classList.add('is-shuffling');
+    finishShuffleEffect();void wells.offsetWidth;wells.classList.add('is-shuffling');
+    // Also expire when hidden or when an animation event cannot be delivered.
+    shuffleEffectTimer=setTimeout(finishShuffleEffect,350);
    }
   }catch(error){console.warn('[palette] Shuffle failed',error);}
   finally{shuffle.disabled=false;}
