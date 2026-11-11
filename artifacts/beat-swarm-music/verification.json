@@ -1,0 +1,28 @@
+{
+  "summary": [
+    {
+      "lane": "foundation_lane",
+      "commits": 3,
+      "canonicalEventsChecked": 210,
+      "actualVoicesStarted": 221,
+      "finalPhaseEvents": 76
+    },
+    {
+      "lane": "secondary_loop_lane",
+      "commits": 3,
+      "canonicalEventsChecked": 78,
+      "actualVoicesStarted": 83,
+      "finalPhaseEvents": 40
+    },
+    {
+      "lane": "primary_loop_lane",
+      "commits": 1,
+      "canonicalEventsChecked": 106,
+      "actualVoicesStarted": 117,
+      "finalPhaseEvents": 74
+    }
+  ],
+  "testsPassed": 261,
+  "physicalImpacts": 8,
+  "humanListeningVerified": false
+}

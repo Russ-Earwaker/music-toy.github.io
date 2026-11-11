@@ -1,7 +1,7 @@
 function finitePoint(point) {
   if (!point) return null;
-  const x = Number(point.x);
-  const y = Number(point.y);
+  const x = Number(point.x ?? point.wx);
+  const y = Number(point.y ?? point.wy);
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 }
 
@@ -39,7 +39,10 @@ export function isLogicalPointWithinSegment(point, start, end, radiusLogical) {
 }
 
 export function createWorldLogicalCollision(worldToLogical) {
-  const project = typeof worldToLogical === 'function' ? worldToLogical : ((point) => point);
+  const project = point => {
+    const world = finitePoint(point);
+    return world && typeof worldToLogical === 'function' ? worldToLogical(world) : world;
+  };
   return Object.freeze({
     pointWithinRadius(pointWorld, centerWorld, radiusLogical) {
       return isLogicalPointWithinRadius(project(pointWorld), project(centerWorld), radiusLogical);

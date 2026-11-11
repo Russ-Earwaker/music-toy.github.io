@@ -1,0 +1,835 @@
+{
+  "samples": [
+    {
+      "width": 1600,
+      "height": 900,
+      "entries": [
+        {
+          "formationId": "director-gunner_snare-1",
+          "type": "director:gunner_snare",
+          "side": "right",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -553.1367847347251,
+            "right": 2155.269816407913,
+            "top": -412.3049527012362,
+            "bottom": 2007.8037429509377
+          },
+          "translationWorld": {
+            "x": 3183.57255075778,
+            "y": 0
+          },
+          "initialBounds": {
+            "left": 2630.435766023055,
+            "right": 5338.842367165692,
+            "top": -412.30495270123623,
+            "bottom": 2007.8037429509377
+          },
+          "memberIds": [
+            2,
+            3,
+            4
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "resizeRestagings": [
+            {
+              "frame": 22,
+              "visibleRect": {
+                "left": -939.1304513682489,
+                "right": 2539.130418196968,
+                "top": -490.76088615085774,
+                "bottom": 1465.760852979577
+              },
+              "offset": {
+                "x": 34.2395194563951,
+                "y": 0
+              },
+              "bounds": {
+                "left": 2630.435766023055,
+                "right": 5338.601160473765,
+                "top": -408.8040259688918,
+                "bottom": 1999.5029585545858
+              }
+            }
+          ],
+          "currentVisibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -490.76088615085774,
+            "bottom": 1465.760852979577
+          },
+          "currentBounds": {
+            "left": 2630.435766023055,
+            "right": 5338.601160473765,
+            "top": -408.8040259688918,
+            "bottom": 1999.5029585545858
+          }
+        },
+        {
+          "formationId": "director-laser_hihat-2",
+          "type": "director:laser_hihat",
+          "side": "top",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -887.1148576915002,
+            "right": 2489.247889364688,
+            "top": -1201.0298044902,
+            "bottom": 2175.332942565988
+          },
+          "translationWorld": {
+            "x": 0,
+            "y": -3001.9643939342373
+          },
+          "initialBounds": {
+            "left": -887.1148576915001,
+            "right": 2489.247889364687,
+            "top": -4202.994198424438,
+            "bottom": -826.6314513682493
+          },
+          "memberIds": [
+            5,
+            6,
+            7,
+            8
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "currentVisibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -490.76088615085774,
+            "bottom": 1465.760852979577
+          },
+          "currentBounds": {
+            "left": -879.6646331409564,
+            "right": 2480.2510654504276,
+            "top": -4168.447927584541,
+            "bottom": -792.2756129840042
+          }
+        },
+        {
+          "formationId": "director-laser_lead-3",
+          "type": "director:laser_lead",
+          "side": "top",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -875.6869630949702,
+            "right": 2103.095029467552,
+            "top": -814.8769445930637,
+            "bottom": 2163.9050479694583
+          },
+          "translationWorld": {
+            "x": 0,
+            "y": -2990.5364993377075
+          },
+          "initialBounds": {
+            "left": -875.6869630949703,
+            "right": 2103.095029467552,
+            "top": -3805.4134439307713,
+            "bottom": -826.6314513682493
+          },
+          "memberIds": [
+            9,
+            10,
+            11
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "currentVisibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -490.76088615085774,
+            "bottom": 1465.760852979577
+          },
+          "currentBounds": {
+            "left": -867.666437594588,
+            "right": 2097.7370490172216,
+            "top": -3771.1721093040283,
+            "bottom": -792.1163533218047
+          }
+        }
+      ]
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "entries": [
+        {
+          "formationId": "director-gunner_snare-1",
+          "type": "director:gunner_snare",
+          "side": "right",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -553.1367847347251,
+            "right": 2155.269816407913,
+            "top": -412.3049527012362,
+            "bottom": 2007.8037429509377
+          },
+          "translationWorld": {
+            "x": 3183.57255075778,
+            "y": 0
+          },
+          "initialBounds": {
+            "left": 2630.435766023055,
+            "right": 5338.842367165692,
+            "top": -412.30495270123623,
+            "bottom": 2007.8037429509377
+          },
+          "memberIds": [
+            2,
+            3,
+            4
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "resizeRestagings": [
+            {
+              "frame": 22,
+              "visibleRect": {
+                "left": -939.1304513682489,
+                "right": 2539.130418196968,
+                "top": -490.76088615085774,
+                "bottom": 1465.760852979577
+              },
+              "offset": {
+                "x": 34.2395194563951,
+                "y": 0
+              },
+              "bounds": {
+                "left": 2630.435766023055,
+                "right": 5338.601160473765,
+                "top": -408.8040259688918,
+                "bottom": 1999.5029585545858
+              }
+            },
+            {
+              "frame": 30,
+              "visibleRect": {
+                "left": -1286.956538324771,
+                "right": 2886.95650515349,
+                "top": -686.4130600639012,
+                "bottom": 1661.4130268926203
+              },
+              "offset": {
+                "x": 347.826086956522,
+                "y": 0
+              },
+              "bounds": {
+                "left": 2978.261852979577,
+                "right": 5686.427247430287,
+                "top": -408.8040259688918,
+                "bottom": 1999.5029585545858
+              }
+            }
+          ],
+          "currentVisibleRect": {
+            "left": -1286.956538324771,
+            "right": 2886.95650515349,
+            "top": -686.4130600639012,
+            "bottom": 1661.4130268926203
+          },
+          "currentBounds": {
+            "left": 2978.261852979577,
+            "right": 5686.427247430287,
+            "top": -408.8040259688918,
+            "bottom": 1999.5029585545858
+          }
+        },
+        {
+          "formationId": "director-laser_hihat-2",
+          "type": "director:laser_hihat",
+          "side": "top",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -887.1148576915002,
+            "right": 2489.247889364688,
+            "top": -1201.0298044902,
+            "bottom": 2175.332942565988
+          },
+          "translationWorld": {
+            "x": 0,
+            "y": -3001.9643939342373
+          },
+          "initialBounds": {
+            "left": -887.1148576915001,
+            "right": 2489.247889364687,
+            "top": -4202.994198424438,
+            "bottom": -826.6314513682493
+          },
+          "memberIds": [
+            5,
+            6,
+            7,
+            8
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "currentVisibleRect": {
+            "left": -1286.956538324771,
+            "right": 2886.95650515349,
+            "top": -686.4130600639012,
+            "bottom": 1661.4130268926203
+          },
+          "currentBounds": {
+            "left": -879.6646331409564,
+            "right": 2480.2510654504276,
+            "top": -4168.447927584541,
+            "bottom": -792.2756129840042
+          }
+        },
+        {
+          "formationId": "director-laser_lead-3",
+          "type": "director:laser_lead",
+          "side": "top",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -875.6869630949702,
+            "right": 2103.095029467552,
+            "top": -814.8769445930637,
+            "bottom": 2163.9050479694583
+          },
+          "translationWorld": {
+            "x": 0,
+            "y": -2990.5364993377075
+          },
+          "initialBounds": {
+            "left": -875.6869630949703,
+            "right": 2103.095029467552,
+            "top": -3805.4134439307713,
+            "bottom": -826.6314513682493
+          },
+          "memberIds": [
+            9,
+            10,
+            11
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "currentVisibleRect": {
+            "left": -1286.956538324771,
+            "right": 2886.95650515349,
+            "top": -686.4130600639012,
+            "bottom": 1661.4130268926203
+          },
+          "currentBounds": {
+            "left": -867.666437594588,
+            "right": 2097.7370490172216,
+            "top": -3771.1721093040283,
+            "bottom": -792.1163533218047
+          }
+        }
+      ]
+    },
+    {
+      "width": 1000,
+      "height": 900,
+      "entries": [
+        {
+          "formationId": "director-gunner_snare-1",
+          "type": "director:gunner_snare",
+          "side": "right",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -553.1367847347251,
+            "right": 2155.269816407913,
+            "top": -412.3049527012362,
+            "bottom": 2007.8037429509377
+          },
+          "translationWorld": {
+            "x": 3183.57255075778,
+            "y": 0
+          },
+          "initialBounds": {
+            "left": 2630.435766023055,
+            "right": 5338.842367165692,
+            "top": -412.30495270123623,
+            "bottom": 2007.8037429509377
+          },
+          "memberIds": [
+            2,
+            3,
+            4
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "resizeRestagings": [
+            {
+              "frame": 22,
+              "visibleRect": {
+                "left": -939.1304513682489,
+                "right": 2539.130418196968,
+                "top": -490.76088615085774,
+                "bottom": 1465.760852979577
+              },
+              "offset": {
+                "x": 34.2395194563951,
+                "y": 0
+              },
+              "bounds": {
+                "left": 2630.435766023055,
+                "right": 5338.601160473765,
+                "top": -408.8040259688918,
+                "bottom": 1999.5029585545858
+              }
+            },
+            {
+              "frame": 30,
+              "visibleRect": {
+                "left": -1286.956538324771,
+                "right": 2886.95650515349,
+                "top": -686.4130600639012,
+                "bottom": 1661.4130268926203
+              },
+              "offset": {
+                "x": 347.826086956522,
+                "y": 0
+              },
+              "bounds": {
+                "left": 2978.261852979577,
+                "right": 5686.427247430287,
+                "top": -408.8040259688918,
+                "bottom": 1999.5029585545858
+              }
+            }
+          ],
+          "currentVisibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -1077.7174078899882,
+            "bottom": 2052.7173747187076
+          },
+          "currentBounds": {
+            "left": 2978.261852979577,
+            "right": 5686.427247430287,
+            "top": -408.8040259688918,
+            "bottom": 1999.5029585545858
+          }
+        },
+        {
+          "formationId": "director-laser_hihat-2",
+          "type": "director:laser_hihat",
+          "side": "top",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -887.1148576915002,
+            "right": 2489.247889364688,
+            "top": -1201.0298044902,
+            "bottom": 2175.332942565988
+          },
+          "translationWorld": {
+            "x": 0,
+            "y": -3001.9643939342373
+          },
+          "initialBounds": {
+            "left": -887.1148576915001,
+            "right": 2489.247889364687,
+            "top": -4202.994198424438,
+            "bottom": -826.6314513682493
+          },
+          "memberIds": [
+            5,
+            6,
+            7,
+            8
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "resizeRestagings": [
+            {
+              "frame": 37,
+              "visibleRect": {
+                "left": -939.1304513682489,
+                "right": 2539.130418196968,
+                "top": -1077.7174078899882,
+                "bottom": 2052.7173747187076
+              },
+              "offset": {
+                "x": 0,
+                "y": -376.747142732071
+              },
+              "bounds": {
+                "left": -879.6646331409564,
+                "right": 2480.2510654504276,
+                "top": -4545.195070316611,
+                "bottom": -1169.0227557160752
+              }
+            }
+          ],
+          "currentVisibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -1077.7174078899882,
+            "bottom": 2052.7173747187076
+          },
+          "currentBounds": {
+            "left": -879.6646331409564,
+            "right": 2480.2510654504276,
+            "top": -4545.195070316611,
+            "bottom": -1169.0227557160752
+          }
+        },
+        {
+          "formationId": "director-laser_lead-3",
+          "type": "director:laser_lead",
+          "side": "top",
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -735.3261035421622,
+            "bottom": 1710.3260703708813
+          },
+          "marginWorld": 91.30434782608695,
+          "originalBounds": {
+            "left": -875.6869630949702,
+            "right": 2103.095029467552,
+            "top": -814.8769445930637,
+            "bottom": 2163.9050479694583
+          },
+          "translationWorld": {
+            "x": 0,
+            "y": -2990.5364993377075
+          },
+          "initialBounds": {
+            "left": -875.6869630949703,
+            "right": 2103.095029467552,
+            "top": -3805.4134439307713,
+            "bottom": -826.6314513682493
+          },
+          "memberIds": [
+            9,
+            10,
+            11
+          ],
+          "spawnFrame": 17,
+          "firstIntersectionFrame": null,
+          "resizeRestagings": [
+            {
+              "frame": 37,
+              "visibleRect": {
+                "left": -939.1304513682489,
+                "right": 2539.130418196968,
+                "top": -1077.7174078899882,
+                "bottom": 2052.7173747187076
+              },
+              "offset": {
+                "x": 0,
+                "y": -376.90640239427046
+              },
+              "bounds": {
+                "left": -867.666437594588,
+                "right": 2097.7370490172216,
+                "top": -4148.078511698299,
+                "bottom": -1169.0227557160752
+              }
+            }
+          ],
+          "currentVisibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -1077.7174078899882,
+            "bottom": 2052.7173747187076
+          },
+          "currentBounds": {
+            "left": -867.666437594588,
+            "right": 2097.7370490172216,
+            "top": -4148.078511698299,
+            "bottom": -1169.0227557160752
+          }
+        }
+      ]
+    }
+  ],
+  "entered": [
+    {
+      "formationId": "director-gunner_snare-1",
+      "type": "director:gunner_snare",
+      "side": "right",
+      "visibleRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -735.3261035421622,
+        "bottom": 1710.3260703708813
+      },
+      "marginWorld": 91.30434782608695,
+      "originalBounds": {
+        "left": -553.1367847347251,
+        "right": 2155.269816407913,
+        "top": -412.3049527012362,
+        "bottom": 2007.8037429509377
+      },
+      "translationWorld": {
+        "x": 3183.57255075778,
+        "y": 0
+      },
+      "initialBounds": {
+        "left": 2630.435766023055,
+        "right": 5338.842367165692,
+        "top": -412.30495270123623,
+        "bottom": 2007.8037429509377
+      },
+      "memberIds": [
+        2,
+        3,
+        4
+      ],
+      "spawnFrame": 17,
+      "firstIntersectionFrame": 147,
+      "resizeRestagings": [
+        {
+          "frame": 22,
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -490.76088615085774,
+            "bottom": 1465.760852979577
+          },
+          "offset": {
+            "x": 34.2395194563951,
+            "y": 0
+          },
+          "bounds": {
+            "left": 2630.435766023055,
+            "right": 5338.601160473765,
+            "top": -408.8040259688918,
+            "bottom": 1999.5029585545858
+          }
+        },
+        {
+          "frame": 30,
+          "visibleRect": {
+            "left": -1286.956538324771,
+            "right": 2886.95650515349,
+            "top": -686.4130600639012,
+            "bottom": 1661.4130268926203
+          },
+          "offset": {
+            "x": 347.826086956522,
+            "y": 0
+          },
+          "bounds": {
+            "left": 2978.261852979577,
+            "right": 5686.427247430287,
+            "top": -408.8040259688918,
+            "bottom": 1999.5029585545858
+          }
+        }
+      ],
+      "firstIntersectionRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -1077.7174078899882,
+        "bottom": 2052.7173747187076
+      },
+      "currentVisibleRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -1077.7174078899882,
+        "bottom": 2052.7173747187076
+      },
+      "currentBounds": {
+        "left": 378.9366418155829,
+        "right": 2579.0000714492976,
+        "top": -87.96684336131352,
+        "bottom": 1318.232899840823
+      }
+    },
+    {
+      "formationId": "director-laser_hihat-2",
+      "type": "director:laser_hihat",
+      "side": "top",
+      "visibleRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -735.3261035421622,
+        "bottom": 1710.3260703708813
+      },
+      "marginWorld": 91.30434782608695,
+      "originalBounds": {
+        "left": -887.1148576915002,
+        "right": 2489.247889364688,
+        "top": -1201.0298044902,
+        "bottom": 2175.332942565988
+      },
+      "translationWorld": {
+        "x": 0,
+        "y": -3001.9643939342373
+      },
+      "initialBounds": {
+        "left": -887.1148576915001,
+        "right": 2489.247889364687,
+        "top": -4202.994198424438,
+        "bottom": -826.6314513682493
+      },
+      "memberIds": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "spawnFrame": 17,
+      "firstIntersectionFrame": 80,
+      "resizeRestagings": [
+        {
+          "frame": 37,
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -1077.7174078899882,
+            "bottom": 2052.7173747187076
+          },
+          "offset": {
+            "x": 0,
+            "y": -376.747142732071
+          },
+          "bounds": {
+            "left": -879.6646331409564,
+            "right": 2480.2510654504276,
+            "top": -4545.195070316611,
+            "bottom": -1169.0227557160752
+          }
+        }
+      ],
+      "firstIntersectionRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -1077.7174078899882,
+        "bottom": 2052.7173747187076
+      },
+      "currentVisibleRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -1077.7174078899882,
+        "bottom": 2052.7173747187076
+      },
+      "currentBounds": {
+        "left": -126.12481700628032,
+        "right": 2018.989719548686,
+        "top": -1423.7974886657676,
+        "bottom": 1499.7548134487524
+      }
+    },
+    {
+      "formationId": "director-laser_lead-3",
+      "type": "director:laser_lead",
+      "side": "top",
+      "visibleRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -735.3261035421622,
+        "bottom": 1710.3260703708813
+      },
+      "marginWorld": 91.30434782608695,
+      "originalBounds": {
+        "left": -875.6869630949702,
+        "right": 2103.095029467552,
+        "top": -814.8769445930637,
+        "bottom": 2163.9050479694583
+      },
+      "translationWorld": {
+        "x": 0,
+        "y": -2990.5364993377075
+      },
+      "initialBounds": {
+        "left": -875.6869630949703,
+        "right": 2103.095029467552,
+        "top": -3805.4134439307713,
+        "bottom": -826.6314513682493
+      },
+      "memberIds": [
+        9,
+        10,
+        11
+      ],
+      "spawnFrame": 17,
+      "firstIntersectionFrame": 80,
+      "resizeRestagings": [
+        {
+          "frame": 37,
+          "visibleRect": {
+            "left": -939.1304513682489,
+            "right": 2539.130418196968,
+            "top": -1077.7174078899882,
+            "bottom": 2052.7173747187076
+          },
+          "offset": {
+            "x": 0,
+            "y": -376.90640239427046
+          },
+          "bounds": {
+            "left": -867.666437594588,
+            "right": 2097.7370490172216,
+            "top": -4148.078511698299,
+            "bottom": -1169.0227557160752
+          }
+        }
+      ],
+      "firstIntersectionRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -1077.7174078899882,
+        "bottom": 2052.7173747187076
+      },
+      "currentVisibleRect": {
+        "left": -939.1304513682489,
+        "right": 2539.130418196968,
+        "top": -1077.7174078899882,
+        "bottom": 2052.7173747187076
+      },
+      "currentBounds": {
+        "left": -64.22453407132221,
+        "right": 1813.937149771873,
+        "top": -1038.8196893487345,
+        "bottom": 1455.4581329631988
+      }
+    }
+  ]
+}

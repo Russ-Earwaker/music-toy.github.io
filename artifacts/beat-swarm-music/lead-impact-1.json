@@ -1,0 +1,102 @@
+{
+  "impacts": [
+    {
+      "type": "lead_ball_physical_impact",
+      "payload": {
+        "enemyId": 229,
+        "at": {
+          "x": 46110.45961705516,
+          "y": 172.2727095858449
+        },
+        "normal": {
+          "x": 0.9999738204673501,
+          "y": 0.007235909060527197
+        },
+        "velocity": {
+          "x": 1449.9610299483093,
+          "y": 10.630692886243711
+        },
+        "queued": true
+      },
+      "beatIndex": 359,
+      "stepIndex": 718,
+      "barIndex": 89
+    }
+  ],
+  "lead": {
+    "active": true,
+    "eventId": "lead-ball-mwcics6x",
+    "themeId": "leadTheme",
+    "laneId": "primary_loop_lane",
+    "hitCount": 0,
+    "targetHitCount": 8,
+    "pendingHitCount": 1,
+    "complete": false,
+    "densityTargetReached": false,
+    "captureAllowance": 1,
+    "captureDeficit": 0,
+    "captureSpacingReady": false,
+    "nextCaptureInTicks": 3,
+    "awaitingCarrier": false,
+    "pickupActive": false,
+    "interactionTargets": [],
+    "ballCount": 1,
+    "postCompletePlaybackActive": false,
+    "postCompleteStartTick": -1,
+    "postCompleteUntilTick": -1,
+    "captureStartTick": 717,
+    "captureEndTick": 748,
+    "captureDeadlineTick": 748,
+    "selections": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "hitHistory": [],
+    "hitEnemyCount": 0,
+    "routes": [
+      {
+        "ballId": 1,
+        "world": {
+          "x": 46158.74331935246,
+          "y": 172.626711658957
+        },
+        "velocity": {
+          "x": 1449.9610299483093,
+          "y": 10.630692886243711
+        },
+        "destinationEnemyId": 239,
+        "ricochetEnemyId": 0
+      }
+    ]
+  }
+}

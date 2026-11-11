@@ -1,3 +1,4 @@
+import { sweepLeadBallCircle, reflectLeadBallVelocity } from './beat-swarm-lead-ball-collision.js';
 import { updateMusicObjectAutoActivation } from './beat-swarm-music-object-auto-activation.js?v=2026-08-08-auto-activation-v2';
 import { reflectBeatSwarmLogicalMotion } from './beat-swarm-logical-movement.js';
 
@@ -6,8 +7,6 @@ const BALL_RADIUS = 42;
 const BALL_SPEED = 1450;
 const BALL_TURN_RATE = 8.4;
 const BALL_HOP_TURN_RATE = 14.5;
-const BALL_HIT_RADIUS = 74;
-const BALL_INCIDENTAL_HIT_RADIUS = 150;
 const BALL_HOP_PATH_RADIUS = 280;
 const BALL_HOP_MIN_TRAVEL = 260;
 const BALL_BUMP_RADIUS = 94;
@@ -458,6 +457,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         lastContactEnemyId: 0,
         contactCooldown: 0,
         captureOpenLast: false,
+        reboundT: 0,
         el: createBallEl(),
       };
     });
@@ -813,15 +813,6 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const next = findHopEnemyOnDestinationPath(ballActor, destinationEnemy);
     ballActor.ricochetEnemyId = Math.trunc(Number(next?.enemy?.id) || 0);
     return next?.enemy || null;
-  }
-
-  function getCurrentAimEnemy(ballActor = null) {
-    const destination = getCurrentTargetEnemy(ballActor);
-    if (!destination) {
-      if (ballActor) ballActor.ricochetEnemyId = 0;
-      return null;
-    }
-    return getCurrentRicochetEnemy(ballActor, destination) || destination;
   }
 
   function findFreeCaptureSlot(triggerTickLike = 0) {
@@ -1203,9 +1194,12 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         && enemyId === Math.trunc(Number(ballActor?.lastContactEnemyId) || 0)
         && Number(ballActor?.contactCooldown) > 0
       ) continue;
-      const info = getSegmentDistanceInfo(enemyPoint(enemy), fromLike, toLike);
-      const hitRadius = pacing.deficit >= 2 ? BALL_INCIDENTAL_HIT_RADIUS : Math.max(BALL_HIT_RADIUS, 118);
-      if (info.distance > hitRadius) continue;
+      if (!isWorldPointInsideGameplay(enemyPoint(enemy))) continue;
+      const project = (p) => deps.worldToLogical?.(point(p)) || point(p);
+      // Match the rendered ball (42) and target body, rather than a pacing-dependent proximity halo.
+      const targetRadius = Math.max(1, Number(deps.getEnemyRadiusLogical?.(enemy)) || (enemy.onboardingAsteroid ? 29 : 21));
+      const info = sweepLeadBallCircle(project(fromLike), project(toLike), project(enemyPoint(enemy)), BALL_RADIUS + targetRadius);
+      if (!info) continue;
       if (!bestInfo || info.t < bestInfo.t) {
         best = enemy;
         bestInfo = info;
@@ -1261,15 +1255,16 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     return best ? { enemy: best, info: bestInfo } : null;
   }
 
-  function handleEnemyCollision(ballActor = null, enemy = null) {
+  function handleEnemyCollision(ballActor = null, enemy = null, contact = null) {
     if (!enemy || !ballActor) return false;
     const ball = ballActor;
     const enemyWorld = enemyPoint(enemy);
-    const normal = normalize(ball.x - enemyWorld.x, ball.y - enemyWorld.y, -ball.vx, -ball.vy);
-    const distance = Math.hypot(ball.x - enemyWorld.x, ball.y - enemyWorld.y);
-    const separation = Math.max(0, BALL_HIT_RADIUS - distance) + 10;
-    ball.x += normal.x * separation;
-    ball.y += normal.y * separation;
+    const normal = contact?.normal || normalize(ball.x - enemyWorld.x, ball.y - enemyWorld.y, -ball.vx, -ball.vy);
+    const at = contact && (deps.logicalToWorld?.(contact.position) || contact.position);
+    if (at) { ball.x = at.x; ball.y = at.y; }
+    spawnImpact(point(ball));
+    enemy.composerActionPulseT = Math.max(Number(enemy.composerActionPulseT) || 0, 0.28);
+    enemy.composerActionPulseDur = Math.max(Number(enemy.composerActionPulseDur) || 0, 0.28);
     enemy.vx = (Number(enemy.vx) || 0) - normal.x * 360;
     enemy.vy = (Number(enemy.vy) || 0) - normal.y * 360;
     const targetId = Math.trunc(Number(ball.targetEnemyId) || 0);
@@ -1292,28 +1287,12 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       ball.targetEnemyId = 0;
       ball.ricochetEnemyId = 0;
     }
-    const nextAim = getCurrentAimEnemy(ball);
-    if (nextAim) {
-      const outgoing = normalize(
-        (Number(nextAim.wx) || 0) - ball.x,
-        (Number(nextAim.wy) || 0) - ball.y,
-        normal.x,
-        normal.y
-      );
-      ball.vx = outgoing.x * BALL_SPEED;
-      ball.vy = outgoing.y * BALL_SPEED;
-    } else {
-      const incoming = normalize(ball.vx, ball.vy, -normal.x, -normal.y);
-      const dot = (incoming.x * normal.x) + (incoming.y * normal.y);
-      const reflected = normalize(
-        incoming.x - 2 * dot * normal.x,
-        incoming.y - 2 * dot * normal.y,
-        normal.x,
-        normal.y
-      );
-      ball.vx = reflected.x * BALL_SPEED;
-      ball.vy = reflected.y * BALL_SPEED;
-    }
+    const reflected = reflectLeadBallVelocity({ x: ball.vx, y: ball.vy }, normal);
+    ball.vx = reflected.x;
+    ball.vy = reflected.y;
+    // Show the physical rebound before the existing target guidance resumes.
+    ball.reboundT = 0.14;
+    deps.onCollision?.({ enemyId, at: point(ball), normal, velocity: reflected, queued });
     return queued;
   }
 
@@ -1440,7 +1419,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       ? getCurrentTargetEnemy(ball, { urgent: true })
       : null;
     const aim = destination ? (getCurrentRicochetEnemy(ball, destination) || destination) : null;
-    if (aim) {
+    if (ball.reboundT > 0) {
+      ball.reboundT = Math.max(0, ball.reboundT - dt);
+    } else if (aim) {
       const desired = normalize((Number(aim.wx) || 0) - ball.x, (Number(aim.wy) || 0) - ball.y, ball.vx, ball.vy);
       const current = normalize(ball.vx, ball.vy, desired.x, desired.y);
       const turnRate = (pacing.captureOpen || preparingCapture)
@@ -1461,11 +1442,11 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const previousBall = { x: ball.x, y: ball.y };
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
-    keepBallInsideViewport(ball);
     const collision = findCollisionEnemy(ball, previousBall, ball);
     if (collision) {
-      handleEnemyCollision(ball, collision.enemy);
+      handleEnemyCollision(ball, collision.enemy, collision.info);
     }
+    keepBallInsideViewport(ball);
     spawnTrail(ball);
   }
 
@@ -1611,6 +1592,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       hitEnemyCount: state.hitEnemyIds.size,
       routes: state.balls.map((ball) => ({
         ballId: Math.max(0, Math.trunc(Number(ball?.id) || 0)),
+        world: point(ball),
+        velocity: { x: ball.vx, y: ball.vy },
         destinationEnemyId: Math.max(0, Math.trunc(Number(ball?.targetEnemyId) || 0)),
         ricochetEnemyId: Math.max(0, Math.trunc(Number(ball?.ricochetEnemyId) || 0)),
       })),

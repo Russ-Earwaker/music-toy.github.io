@@ -2286,7 +2286,7 @@ function getGameCatalog() {
             type: 'beat-swarm',
             name: 'Beat Swarm',
             description: 'Pilot a center-locked ship through the scene.',
-            action: () => BeatSwarmMode.enter(),
+            action: () => { BeatSwarmMode.enter({ weaponGateIntro: true, weaponGateSequence: 'missiles_bouncers' }); if (!isRunning()) start(); },
         },
     ];
 }

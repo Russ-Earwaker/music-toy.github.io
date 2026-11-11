@@ -29,6 +29,8 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     ensureWeaponGateIntroStyle();
     const layer = getLayer();
     if (!layer) return false;
+    layer.style.transition = '';
+    layer.style.opacity = '';
     state = createWeaponGateIntroState(layer, options);
     render();
     return true;
@@ -40,7 +42,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       layer.style.transition = 'opacity 420ms ease';
       layer.style.opacity = '0';
       setTimeout(() => {
-        if (layer.isConnected) {
+        if (layer.isConnected && state?.layer !== layer) {
           layer.innerHTML = '';
           layer.style.transition = '';
           layer.style.opacity = '';

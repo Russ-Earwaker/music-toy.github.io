@@ -1,0 +1,199 @@
+{
+  "impacts": [
+    {
+      "type": "lead_ball_physical_impact",
+      "payload": {
+        "enemyId": 229,
+        "at": {
+          "x": 46110.45961705516,
+          "y": 172.2727095858449
+        },
+        "normal": {
+          "x": 0.9999738204673501,
+          "y": 0.007235909060527197
+        },
+        "velocity": {
+          "x": 1449.9610299483093,
+          "y": 10.630692886243711
+        },
+        "queued": true
+      },
+      "beatIndex": 359,
+      "stepIndex": 718,
+      "barIndex": 89
+    },
+    {
+      "type": "lead_ball_physical_impact",
+      "payload": {
+        "enemyId": 224,
+        "at": {
+          "x": 46426.37826414776,
+          "y": 34.7431181764515
+        },
+        "normal": {
+          "x": -0.7057182986393707,
+          "y": 0.7084925426322792
+        },
+        "velocity": {
+          "x": -1218.013157971378,
+          "y": 786.7299072798692
+        },
+        "queued": true
+      },
+      "beatIndex": 360,
+      "stepIndex": 720,
+      "barIndex": 90
+    },
+    {
+      "type": "lead_ball_physical_impact",
+      "payload": {
+        "enemyId": 230,
+        "at": {
+          "x": 45921.075978687004,
+          "y": 92.35027323054214
+        },
+        "normal": {
+          "x": -0.2891976861933933,
+          "y": 0.9572693969308681
+        },
+        "velocity": {
+          "x": -1449.3695086836865,
+          "y": -42.75543588842618
+        },
+        "queued": true
+      },
+      "beatIndex": 361,
+      "stepIndex": 722,
+      "barIndex": 90
+    },
+    {
+      "type": "lead_ball_physical_impact",
+      "payload": {
+        "enemyId": 232,
+        "at": {
+          "x": 46038.201431004636,
+          "y": -364.15012858863247
+        },
+        "normal": {
+          "x": 0.24051413483436906,
+          "y": -0.9706456361334321
+        },
+        "velocity": {
+          "x": 348.74549550983625,
+          "y": -1407.4361723934767
+        },
+        "queued": true
+      },
+      "beatIndex": 363,
+      "stepIndex": 726,
+      "barIndex": 90
+    }
+  ],
+  "lead": {
+    "active": true,
+    "eventId": "lead-ball-mwcics6x",
+    "themeId": "leadTheme",
+    "laneId": "primary_loop_lane",
+    "hitCount": 3,
+    "targetHitCount": 8,
+    "pendingHitCount": 1,
+    "complete": false,
+    "densityTargetReached": false,
+    "captureAllowance": 3,
+    "captureDeficit": 0,
+    "captureSpacingReady": false,
+    "nextCaptureInTicks": 7,
+    "awaitingCarrier": false,
+    "pickupActive": false,
+    "interactionTargets": [],
+    "ballCount": 1,
+    "postCompletePlaybackActive": false,
+    "postCompleteStartTick": -1,
+    "postCompleteUntilTick": -1,
+    "captureStartTick": 717,
+    "captureEndTick": 748,
+    "captureDeadlineTick": 748,
+    "selections": [
+      null,
+      null,
+      {
+        "slotIndex": 2,
+        "kind": "note",
+        "note": "F3",
+        "reason": "lead_ball_enemy_hit"
+      },
+      null,
+      {
+        "slotIndex": 4,
+        "kind": "note",
+        "note": "F3",
+        "reason": "lead_ball_enemy_hit"
+      },
+      null,
+      null,
+      null,
+      {
+        "slotIndex": 8,
+        "kind": "note",
+        "note": "F3",
+        "reason": "lead_ball_enemy_hit"
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "hitHistory": [
+      {
+        "note": "F3",
+        "tick": 719,
+        "stepIndex": 2
+      },
+      {
+        "note": "F3",
+        "tick": 721,
+        "stepIndex": 4
+      },
+      {
+        "note": "F3",
+        "tick": 725,
+        "stepIndex": 8
+      }
+    ],
+    "hitEnemyCount": 3,
+    "routes": [
+      {
+        "ballId": 1,
+        "world": {
+          "x": 46067.25193078061,
+          "y": -86.41912139715805
+        },
+        "velocity": {
+          "x": 348.74549550983625,
+          "y": 1407.4361723934767
+        },
+        "destinationEnemyId": 0,
+        "ricochetEnemyId": 0
+      }
+    ]
+  }
+}

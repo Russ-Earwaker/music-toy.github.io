@@ -1,0 +1,61 @@
+{
+  "commit": "c8bc736",
+  "sections": [
+    {
+      "name": "pointer handlers",
+      "start": "function onPointerDown(ev)",
+      "end": "function onWheel(ev)",
+      "sha256": "fea454e578075a832949a85b58ec5bcd26a85755caff8ffe6d62f98fae9db73f"
+    },
+    {
+      "name": "corridor controller",
+      "start": "  const input = getInputVector();\n  let weaponGateFrameRuntime",
+      "end": "  const motionState = {",
+      "sha256": "8faa8651be395b871298054928bc46df96c3f2e0a59918e16449d971cd5825c1"
+    },
+    {
+      "name": "firing cadence",
+      "start": "function fireConfiguredWeaponsOnBeat(centerWorld",
+      "end": "function updateBeatWeapons(",
+      "sha256": "ecdae15de4ed7ccadac488ad196ea4ae3cf5136f743ebf4a3c4a20a375609e85"
+    },
+    {
+      "name": "steering",
+      "start": "function getInputVector()",
+      "end": "function updateShipFacing(",
+      "sha256": "8f49553545128fa4031e8e9c8d5df63e2ede9aac824b37cf9e0ee2f13d3a8945"
+    },
+    {
+      "name": "automatic corridor runtime",
+      "file": "beat-swarm-weapon-gate-intro.js",
+      "start": "  function update(dt, input = null, options = null)",
+      "end": "  function triggerWeaponNote",
+      "sha256": "33ac3bdabe3c6e6423be7e4a749a52df87c72897495dab9f3fb45e129605770a"
+    },
+    {
+      "name": "launch runtime",
+      "file": "beat-swarm-weapon-gate-intro.js",
+      "start": "    launch(direction = null)",
+      "end": "    update,",
+      "sha256": "8376df78cf9cd1c5d7283afb8ccaa3adc1e8b5d300b78772769811f2d7033110"
+    }
+  ],
+  "modules": [
+    {
+      "file": "beat-swarm-pointer-input-wrapper.js",
+      "sha256": "d48067fca6efd2aebfd76d4399c52dcd79b35999394b678c930c1050ed4e00b3"
+    },
+    {
+      "file": "beat-swarm-input-controls.js",
+      "sha256": "1d247fa4e480830f8cefa840c9666418534f4037a5b043d37b1c0b41bf5cd705"
+    },
+    {
+      "file": "beat-swarm-release-input.js",
+      "sha256": "fa2759c90e2973c05db622fdcc57285c8a0bb66f2af86f7847befaffe462e6ed"
+    },
+    {
+      "file": "beat-swarm-input-binding-wrapper.js",
+      "sha256": "74dea38f944c38554d8f66a7584a91beddb221a022cb45631f9d1e638bd0f4ed"
+    }
+  ]
+}

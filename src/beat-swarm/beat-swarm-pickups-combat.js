@@ -1,3 +1,4 @@
+import { advanceStraightShot } from './beat-swarm-projectile-travel.js';
 import { createWorldLogicalCollision } from './beat-swarm-logical-collision.js';
 
 let projectileCollisionFrameCursor = 0;
@@ -22,6 +23,9 @@ export function createBeatSwarmProjectileRemovalDiagnostic({
     enteredGameplay: projectile?.enteredGameplay === true || projectile?.hasEnteredScreen === true,
     presentationScale: Math.max(0.001, Number(presentationScale) || 1),
     ttl: Number(projectile?.ttl) || 0,
+    spawnWorld: projectile?.spawnWorld ? { ...projectile.spawnWorld } : null,
+    distanceTravelled: Number(projectile?.distanceTravelled) || 0,
+    maxRangeWorld: Number(projectile?.maxRangeWorld) || null,
   });
 }
 
@@ -199,6 +203,8 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
     projectileCollisionFrameCursor = (projectileCollisionFrameCursor + 1) % 1000000;
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
+      const sweepStart = { x: p.wx, y: p.wy };
+      const isStraight = String(p.kind || 'standard') === 'standard';
       p.ttl -= dt;
       p.collisionGraceT = Math.max(0, Number(p.collisionGraceT) - dt);
       const isBoomerang = String(p.kind || 'standard') === 'boomerang';
@@ -326,6 +332,8 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
             p.wy += p.vy * dt;
           }
           p.homingState = stateName;
+        } else if (isStraight) {
+          advanceStraightShot(p, dt);
         } else {
           p.wx += p.vx * dt;
           p.wy += p.vy * dt;
@@ -347,10 +355,13 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
         }
       }
       withProjectileDetailPerf('pickupsCombat.projectiles.collision', () => {
-        if (collisionStride > 1 && (i % collisionStride) !== collisionPhase) return;
+        if (!isStraight && collisionStride > 1 && (i % collisionStride) !== collisionPhase) return;
         const allowCollision = !(Number(p.collisionGraceT) > 0);
         const collisionRadiusWorld = Math.max(projectileHitRadiusLogical * 3, enemySpatialCellSize);
-        forEachNearbyEnemy(p.wx, p.wy, collisionRadiusWorld, (e) => {
+        const visit = isStraight ? (x, y, radius, fn) => {
+          for (const enemy of enemies) if (fn(enemy) === true) break;
+        } : forEachNearbyEnemy;
+        visit(p.wx, p.wy, collisionRadiusWorld, (e) => {
           if (!allowCollision) return true;
           if (p?.hostileToEnemies === false) return false;
           const enemyId = Math.trunc(Number(e.id) || 0);
@@ -362,7 +373,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           } else {
             const enemyExtraRadiusLogical = Math.max(0, Number(e?.projectileHitRadiusLogical) || 0);
             const effR = projectileHitRadiusLogical + enemyExtraRadiusLogical;
-            if (collision.pointWithinRadius(e, p, effR)) hitPoint = { x: e.wx, y: e.wy };
+            if (isStraight ? collision.pointWithinSegment(e, sweepStart, { x: p.wx, y: p.wy }, effR) : collision.pointWithinRadius(e, p, effR)) hitPoint = { x: e.wx, y: e.wy };
           }
           if (hitPoint) {
             if (isBoomerang) {
@@ -398,7 +409,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       });
       const preProjectionRemovalReason = hit
         ? 'collision'
-        : getBeatSwarmProjectileViewportRemovalReason({ usesTtlDespawn: useTtlDespawn, ttl: p.ttl });
+        : (isStraight ? (p.distanceTravelled >= p.maxRangeWorld - 1e-8 ? 'max_range' : (p.ttl <= 0 ? 'lifetime' : null)) : getBeatSwarmProjectileViewportRemovalReason({ usesTtlDespawn: useTtlDespawn, ttl: p.ttl }));
       if (preProjectionRemovalReason) {
         recordProjectileRemoval(p, preProjectionRemovalReason);
         if (String(p?.kind || '') === 'hostile-red' && Array.isArray(state.pooledHostileRedProjectiles) && p?.el instanceof HTMLElement) {
@@ -429,7 +440,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       const isOffscreen = helpers.isWorldPointInsideGameplay?.(
         projectileWorld, projectileOffscreenPad,
       ) === false;
-      const viewportRemovalReason = getBeatSwarmProjectileViewportRemovalReason({
+      const viewportRemovalReason = isStraight ? null : getBeatSwarmProjectileViewportRemovalReason({
         usesTtlDespawn: useTtlDespawn,
         isOutsideLifetimeBounds: isOffscreen,
         enteredGameplay: p.enteredGameplay === true || p.hasEnteredScreen === true,

@@ -2373,18 +2373,16 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   })();
   const authoredBassDriveContinuityActive = !suppressDirectorMusic
     && !isLaneSuppressed('foundation_lane')
-    && getDirectorMotifBedStageState().stage !== 'silent'
     && helpers.isPlayerMusicThemeAuthored?.('bassDrive') === true;
   const authoredAccentMusicAllowed = !suppressDirectorMusic || preserveAuthoredAccentContinuity;
   const authoredAccentRhythmContinuityActive = authoredAccentMusicAllowed
     && !isLaneSuppressed('secondary_loop_lane')
-    && getDirectorMotifBedStageState().stage !== 'silent'
     && helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true;
   const explicitPlayerBassDriveEvent = (() => {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('foundation_lane')) return null;
     const bedState = getDirectorMotifBedStageState();
-    if (bedState.stage === 'silent') return null;
+    // Committed player material survives director arrangement rests.
     if (helpers.isPlayerMusicThemeAuthored?.('bassDrive') !== true) return null;
     const authoredStep = helpers.getPlayerSimpleRhythmThemePlaybackStep?.('bassDrive', stepIndex) || null;
     const lane = helpers.getFoundationLaneSnapshot?.(stepIndex, barIndex) || null;

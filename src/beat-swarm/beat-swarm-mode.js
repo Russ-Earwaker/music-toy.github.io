@@ -1,5 +1,6 @@
-import { getZoomState } from '../zoom/ZoomCoordinator.js';
-import { screenToWorld, worldToScreen } from '../board-viewport.js';
+import { ENEMY_SPAWN_MARGIN_WORLD, ENEMY_SPAWN_RADIUS_LOGICAL, getVisibleBeatSwarmWorldRect, getVisibleBeatSwarmLogicalBounds, getSpawnFormationBounds, spawnBoundsIntersect, hasEnemyEnteredSpawnView, stageBeatSwarmFormation } from './beat-swarm-spawn-placement.js';
+import { getZoomState as getBoardZoomState } from '../zoom/ZoomCoordinator.js';
+import { screenToWorld as boardScreenToWorld, worldToScreen } from '../board-viewport.js';
 import { createDomViewportSpace } from '../coordinates/dom-viewport-space.js';
 import {
   BEAT_SWARM_LOGICAL_SIZE,
@@ -164,7 +165,10 @@ function triggerBeatSwarmInstrument(instrument, noteName, when, destOrId, option
     const role = String(beatSwarmExecutionTriggerEvent?.role || '').trim().toLowerCase();
     const executionLaneId = String(triggerPayload?.musicLaneId || triggerPayload?.foundationLaneId || '').trim().toLowerCase()
       || (role === 'bass' ? 'foundation_lane' : (role === 'accent' ? 'secondary_loop_lane' : ''));
-    if (!directAuthoringPlayback && !playerOrWeaponPlayback && executionLaneId === authoringLaneId) {
+    const committedPlayerPlayback = !!triggerPayload?.foundationPlayerThemeSource
+      || !!triggerPayload?.musicLanePlayerThemeSource
+      || !!triggerPayload?.leadPlayerThemeSource;
+    if (!directAuthoringPlayback && !playerOrWeaponPlayback && !committedPlayerPlayback && executionLaneId === authoringLaneId) {
       try {
         noteMusicSystemEvent('music_authoring_lane_audio_suppressed', {
           authoringLaneId,
@@ -4233,6 +4237,7 @@ const musicMissileRuntime = createBeatSwarmMusicMissileRuntime({
     const instrumentId = getRhythmRewriteTargetInstrumentId(target);
     const note = getRhythmRewriteTargetNote(target);
     const loopPlayback = event.loopPlayback === true;
+    if (loopPlayback && isPlayerMusicThemeAuthored(target.themeId)) return;
     triggerBeatSwarmInstrument(instrumentId, note, undefined, 'master', {
       source: loopPlayback ? 'music-missile-motif-loop' : 'music-missile-detonation',
       musicLaneId: target.laneId,
@@ -4365,6 +4370,7 @@ const pinballBouncerRuntime = createBeatSwarmPinballBouncerRuntime({
     });
     const instrumentId = getRhythmRewriteTargetInstrumentId(target);
     const note = getRhythmRewriteTargetNote(target);
+    if (event.loopPlayback === true && isPlayerMusicThemeAuthored(target.themeId)) return;
     triggerBeatSwarmInstrument(instrumentId, note, undefined, 'master', {
       source: event.loopPlayback === true ? 'pinball-bouncer-motif-loop' : 'pinball-bouncer-impact',
       musicLaneId: target.laneId,
@@ -4530,6 +4536,7 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
       .slice(0, 3);
     const instrumentId = getPlayerDrawgridThemeInstrumentId('leadTheme') || 'RETRO SQUARE';
     const loopPlayback = event.loopPlayback === true;
+    if (loopPlayback && hasLeadBallAuthoredMotif()) return;
     notes.forEach((playbackNote, noteIndex) => {
       triggerBeatSwarmInstrument(instrumentId, playbackNote, undefined, 'master', {
         source: loopPlayback ? 'lead-ball-motif-loop' : 'lead-ball-impact',
@@ -4586,6 +4593,12 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
         stepIndex: Math.max(0, Math.trunc(Number(event.tickIndex) || 0)),
       });
     } catch {}
+  },
+  getEnemyRadiusLogical: (enemy) => (enemy?.onboardingAsteroid ? 29 : 21) * getEnemySpawnScale(enemy),
+  onCollision(event = {}) {
+    const enemy = getSwarmEnemyById(event.enemyId);
+    if (enemy?.el) pulseHitFlash(enemy.el);
+    noteMusicSystemEvent('lead_ball_physical_impact', event, { beatIndex: currentBeatIndex });
   },
   onViewportBounce(event = {}) {
     try { noteMusicSystemEvent('lead_ball_viewport_bounce', event, { beatIndex: currentBeatIndex }); } catch {}
@@ -9387,7 +9400,9 @@ function createLeadGateDirectPrimaryLoopEventRuntime(options = null) {
     && !literalProtectionActive
     && !embellishmentRampActive
     && postHandoffCycleLoop === 3;
-  let leadThemeStep = literalProtectionActive
+  let leadThemeStep = canonicalBallLeadPlayback
+    ? getLatestLeadBallMotifStep(relativeStepIndex)
+    : literalProtectionActive
     ? getLiteralLeadPlaybackStep(relativeStepIndex)
     : (embellishmentRampActive
       ? getLeadBallEmbellishmentRampStep(relativeStepIndex, embellishmentRampLoop)
@@ -23983,14 +23998,29 @@ function renderPauseWeaponUi() {
   pausePreviewSceneEl = result.pausePreviewSceneEl;
   pausePreviewStatusEl = result.pausePreviewStatusEl;
 }
+// Keep board user zoom/responsive presentation outside BeatSwarm simulation units.
+let beatSwarmCameraScale = SWARM_CAMERA_TARGET_SCALE;
+let beatSwarmPreviousBoardView = null;
+let beatSwarmPreviousTransportRunning = false;
+function getZoomState() {
+  const board = getBoardZoomState();
+  return active ? { ...board, targetScale: beatSwarmCameraScale, currentScale: beatSwarmCameraScale } : board;
+}
+function screenToWorld(point) {
+  if (active && beatSwarmViewportProjection && beatSwarmPlayerWorldPosition) {
+    return beatSwarmViewportProjection.logicalToWorld(beatSwarmViewportProjection.screenToLogical(point));
+  }
+  return boardScreenToWorld(point);
+}
+function setBeatSwarmBoardViewport(scale, x, y) {
+  beatSwarmCameraScale = scale;
+  const base = Number(getBoardZoomState()?.responsiveBaseScale) || 1;
+  window.__setBoardViewportNow?.(scale * getCurrentBeatSwarmPresentationScale() / base, x, y);
+}
 function applyCameraDelta(dx, dy) {
-  const z = getZoomState();
-  const s = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
-  const x = Number.isFinite(z?.targetX) ? z.targetX : (Number.isFinite(z?.currentX) ? z.currentX : 0);
-  const y = Number.isFinite(z?.targetY) ? z.targetY : (Number.isFinite(z?.currentY) ? z.currentY : 0);
-  const nextX = x - dx;
-  const nextY = y - dy;
-  try { window.__setBoardViewportNow?.(s, nextX, nextY); } catch {}
+  const player = getViewportCenterWorld();
+  const scale = getBeatSwarmCameraScale();
+  snapCameraToWorld({ x: player.x + dx / scale, y: player.y + dy / scale }, scale);
 }
 function getBoardStageElement() {
   try {
@@ -24011,37 +24041,78 @@ function projectBeatSwarmLogicalSpawnPoint(point = null) {
 function projectBeatSwarmLogicalSpawnLength(length = 0) {
   return Number(beatSwarmViewportProjection?.logicalLengthToScreen?.(length)) || 0;
 }
+const beatSwarmSpawnEntries = [];
+function getCurrentSpawnWorldRect() { return getVisibleBeatSwarmWorldRect(getViewportCenterWorld(), getBeatSwarmCameraScale(), getVisibleBeatSwarmLogicalBounds(beatSwarmViewportProjection?.getViewportSpace?.())); }
+function getEntryEnemyPoints(enemy, radiusWorld = (enemy.__bsEntryRadiusLogical || ENEMY_SPAWN_RADIUS_LOGICAL.large) / getBeatSwarmCameraScale()) {
+  const points = [{ x: enemy.wx, y: enemy.wy, radiusWorld }];
+  for (const node of enemy.drawsnakeNodeWorld || []) points.push({ x: node.x, y: node.y, radiusWorld });
+  return points;
+}
+function recordBeatSwarmSpawnEntry(plan, members, type, id = '') {
+  const live = members.filter(Boolean);if (!live.length) return;
+  live.forEach(enemy => { enemy.__bsEntryRadiusLogical = plan.points[0].radiusWorld * getBeatSwarmCameraScale(); enemy.__bsSpawnEntryPending = true; });
+  const entry = { formationId: id || live.map(e=>e.id).join(','), type, side: plan.side, visibleRect: plan.visibleRect, marginWorld: plan.margin,
+    originalBounds: plan.originalBounds, translationWorld: plan.offset, initialBounds: getSpawnFormationBounds(live.flatMap(e=>getEntryEnemyPoints(e))),
+    memberIds: live.map(e=>e.id), spawnFrame: perfFrameIndex, firstIntersectionFrame: null };
+  beatSwarmSpawnEntries.push(entry);if(beatSwarmSpawnEntries.length>64)beatSwarmSpawnEntries.shift();
+}
+function updateBeatSwarmSpawnEntries() {
+  const rect = getCurrentSpawnWorldRect();
+  for (const enemy of enemies) if (enemy.__bsSpawnEntryPending && hasEnemyEnteredSpawnView(enemy, rect)) enemy.__bsSpawnEntryPending = false;
+  for (const entry of beatSwarmSpawnEntries) if (entry.firstIntersectionFrame == null && enemies.some(e=>entry.memberIds.includes(e.id) && spawnBoundsIntersect(getSpawnFormationBounds(getEntryEnemyPoints(e)),rect))) {
+    entry.firstIntersectionFrame = perfFrameIndex;entry.firstIntersectionRect = rect;
+  }
+}
+function restageUnseenSpawnEntriesForResize() {
+  const rect = getCurrentSpawnWorldRect();
+  for (const entry of beatSwarmSpawnEntries) {
+    if (entry.firstIntersectionFrame != null) continue;
+    const members = enemies.filter(e=>entry.memberIds.includes(e.id));
+    if (!members.length || members.some(e=>!e.__bsSpawnEntryPending)) continue;
+    const plan = stageBeatSwarmFormation(members.flatMap(e=>getEntryEnemyPoints(e)),rect,entry.side);
+    if (!plan.offset.x && !plan.offset.y) continue;
+    for (const enemy of members) {
+      enemy.wx += plan.offset.x;enemy.wy += plan.offset.y;
+      for (const point of [...(enemy.drawsnakeNodeWorld||[]),...(enemy.drawsnakeTrail||[])]) { point.x += plan.offset.x;point.y += plan.offset.y; }
+    }
+    const group = composerEnemyGroups.find(g=>g.id===entry.formationId);
+    if (group?.behavioralFormationArchetype === 'advancing_line' && group?.basicLaneCarrierHandoff !== true) {
+      group.behavioralFormationPathOriginWorldX += plan.offset.x;group.behavioralFormationPathOriginWorldY += plan.offset.y;
+    }
+    (entry.resizeRestagings ||= []).push({frame:perfFrameIndex,visibleRect:rect,offset:plan.offset,bounds:plan.bounds});
+  }
+}
+function spawnOffscreenLogicalEnemy(point, options, spawn, type, radiusLogical) {
+  if (options?.spawnPlacement === 'authored') return spawn(point, options);
+  const world = projectBeatSwarmLogicalToWorld(point);if(!world)return null;
+  const plan = stageBeatSwarmFormation([{...world,radiusWorld:radiusLogical/getBeatSwarmCameraScale()}],getCurrentSpawnWorldRect());
+  const logical = projectBeatSwarmWorldToLogical(plan.points[0]);const nextId = enemyIdSeq;
+  const enemy = spawn(logical,options);if(enemy && enemy.id>=nextId)recordBeatSwarmSpawnEntry(plan,[enemy],type);
+  return enemy;
+}
 function spawnEnemyAtLogical(point = null, options = null) {
-  const screen = projectBeatSwarmLogicalSpawnPoint(point);
-  return screen ? spawnEnemyAt(screen.x, screen.y, { ...(options || {}), spawnLogicalPoint: point }) : null;
+  return spawnOffscreenLogicalEnemy(point,options,(logical,opts)=>{
+    const screen = projectBeatSwarmLogicalSpawnPoint(logical);
+    return screen ? spawnEnemyAt(screen.x,screen.y,{...(opts||{}),spawnLogicalPoint:logical}) : null;
+  },'single',ENEMY_SPAWN_RADIUS_LOGICAL.small);
 }
 function spawnSpawnerEnemyAtLogical(point = null, options = null) {
-  const screen = projectBeatSwarmLogicalSpawnPoint(point);
-  return screen ? spawnSpawnerEnemyAt(screen.x, screen.y, { ...(options || {}), spawnLogicalPoint: point }) : null;
+  return spawnOffscreenLogicalEnemy(point,options,(logical,opts)=>{
+    const screen = projectBeatSwarmLogicalSpawnPoint(logical);
+    return screen ? spawnSpawnerEnemyAt(screen.x,screen.y,{...(opts||{}),spawnLogicalPoint:logical}) : null;
+  },'spawner',ENEMY_SPAWN_RADIUS_LOGICAL.large);
 }
 function spawnDrawSnakeEnemyAtLogical(point = null, options = null) {
-  const screen = projectBeatSwarmLogicalSpawnPoint(point);
-  return screen ? spawnDrawSnakeEnemyAt(screen.x, screen.y, { ...(options || {}), spawnLogicalPoint: point }) : null;
+  return spawnOffscreenLogicalEnemy(point,options,(logical,opts)=>{
+    const screen = projectBeatSwarmLogicalSpawnPoint(logical);
+    return screen ? spawnDrawSnakeEnemyAt(screen.x,screen.y,{...(opts||{}),spawnLogicalPoint:logical}) : null;
+  },'drawsnake',ENEMY_SPAWN_RADIUS_LOGICAL.large);
 }
 let beatSwarmPlayerWorldPosition = null;
 function getViewportCenterWorld() {
-  if (
-    beatSwarmResizeAnchorLocked
-    && beatSwarmPlayerWorldPosition
-    && Number.isFinite(beatSwarmPlayerWorldPosition.x)
-    && Number.isFinite(beatSwarmPlayerWorldPosition.y)
-  ) {
-    return { x: beatSwarmPlayerWorldPosition.x, y: beatSwarmPlayerWorldPosition.y };
-  }
-  const c = getViewportCenterClient();
-  const w = screenToWorld({ x: c.x, y: c.y });
-  if (w && Number.isFinite(w.x) && Number.isFinite(w.y)) {
-    beatSwarmPlayerWorldPosition = { x: Number(w.x), y: Number(w.y) };
-    return { x: beatSwarmPlayerWorldPosition.x, y: beatSwarmPlayerWorldPosition.y };
-  }
-  return beatSwarmPlayerWorldPosition
-    ? { x: beatSwarmPlayerWorldPosition.x, y: beatSwarmPlayerWorldPosition.y }
-    : { x: 0, y: 0 };
+  if (active && beatSwarmPlayerWorldPosition) return { ...beatSwarmPlayerWorldPosition };
+  const w = boardScreenToWorld(getViewportCenterClient());
+  return w && Number.isFinite(w.x) && Number.isFinite(w.y) ? w : { x: 0, y: 0 };
 }
 let beatSwarmResizeAnchorWorld = null;
 let beatSwarmResizeRaf = 0;
@@ -24207,11 +24278,14 @@ function onBeatSwarmWindowResize() {
       beatSwarmResizeAnchorLocked = false;
       return;
     }
+    // Movement may advance between the resize event and this frame.
+    if (beatSwarmPlayerWorldPosition) Object.assign(anchor, beatSwarmPlayerWorldPosition);
     beatSwarmViewportSpaceController?.update?.();
     snapCameraToWorld(anchor, getBeatSwarmCameraScale());
     beatSwarmPlayerWorldPosition = { x: anchor.x, y: anchor.y };
     beatSwarmResizeAnchorLocked = false;
     updateBeatSwarmResizeAnchor(anchor, true);
+    restageUnseenSpawnEntriesForResize();
     refreshBeatSwarmProjectedVisualsForResize();
   });
 }
@@ -24266,9 +24340,11 @@ function snapCameraToWorld(worldPoint, scaleValue = SWARM_CAMERA_TARGET_SCALE) {
       layoutTop = (Number(rect?.top) || 0) - currentY;
     }
   } catch {}
-  const tx = c.x - layoutLeft - (w.x * s);
-  const ty = c.y - layoutTop - (w.y * s);
-  try { window.__setBoardViewportNow?.(s, tx, ty); } catch {}
+  const effectiveScale = s * getCurrentBeatSwarmPresentationScale();
+  beatSwarmPlayerWorldPosition = { x: w.x, y: w.y };
+  const tx = c.x - layoutLeft - (w.x * effectiveScale);
+  const ty = c.y - layoutTop - (w.y * effectiveScale);
+  try { setBeatSwarmBoardViewport(s, tx, ty); } catch {}
 }
 const MUSIC_INTERACTION_CAMERA_SCALE = 0.31;
 let musicInteractionCameraHoldUntilMs = 0;
@@ -24313,7 +24389,7 @@ function applyBeatSwarmCameraScaleWithRetry(retries = 0) {
       const x = Number.isFinite(z?.targetX) ? z.targetX : (Number.isFinite(z?.currentX) ? z.currentX : 0);
       const y = Number.isFinite(z?.targetY) ? z.targetY : (Number.isFinite(z?.currentY) ? z.currentY : 0);
       const nextScale = Math.max(0.3, Math.min(1, Number(SWARM_CAMERA_TARGET_SCALE) || 0.6));
-      window.__setBoardViewportNow?.(nextScale, x, y);
+      setBeatSwarmBoardViewport(nextScale, x, y);
     } catch {}
   };
   apply();
@@ -26159,6 +26235,7 @@ function spawnEnemyAt(clientX, clientY, options = null) {
   const w = screenToWorld({ x: clientX, y: clientY });
   if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) return;
   const linkedSpawnerId = Number.isFinite(options?.linkedSpawnerId) ? Math.trunc(Number(options.linkedSpawnerId)) : null;
+  if (linkedSpawnerId != null && enemies.some(e=>e.id===linkedSpawnerId && e.__bsSpawnEntryPending)) return;
   const linkedSpawnerStepIndex = Number.isFinite(options?.linkedSpawnerStepIndex) ? Math.trunc(Number(options.linkedSpawnerStepIndex)) : null;
   const useLinkedSpawnerPool = !!(linkedSpawnerId && linkedSpawnerStepIndex != null);
   let pooled = null;
@@ -29046,6 +29123,7 @@ function triggerSingleComposerGroupEnemyAbility(options = null) {
   const enemy = options?.enemy && typeof options.enemy === 'object' ? options.enemy : null;
   if (
     !enemy
+    || enemy.__bsSpawnEntryPending === true
     || enemy.onboardingAsteroid === true
     || String(enemy?.enemyTier || enemy?.gameplayDescriptor?.tier || '').trim().toLowerCase() !== 'basic'
   ) {
@@ -30721,6 +30799,7 @@ function getDrawSnakeNodeIndexForStep(stepIndex, nodeCount) {
   return Math.max(0, Math.min(count - 1, Math.round(t * (count - 1))));
 }
 function fireDrawSnakeProjectile(enemy, nodeIndex, noteName, aggressionScale = 1, instrumentId = null) {
+  if (enemy?.__bsSpawnEntryPending) return;
   const nodes = Array.isArray(enemy?.drawsnakeNodeWorld) ? enemy.drawsnakeNodeWorld : [];
   const idx = Math.max(0, Math.min(nodes.length - 1, Math.trunc(Number(nodeIndex) || 0)));
   flashDrawSnakeNode(enemy, idx);
@@ -32674,7 +32753,7 @@ function updateBeatWeapons(centerWorld) {
   }
   if (isMusicMissileRewriteActive() || isMusicMissilePostCompletePlaybackActive()) {
     const missileLaneId = String(musicMissileRuntime.getSnapshot()?.laneId || '').trim().toLowerCase();
-    if (missileLaneId) suppressedMusicLaneIds.add(missileLaneId);
+    if (missileLaneId && !isPlayerMusicThemeAuthored(musicMissileRuntime.getSnapshot()?.themeId)) suppressedMusicLaneIds.add(missileLaneId);
   }
   if (onboardingAssemblyActive) {
     if (!onboardingLeadAuthored) suppressedMusicLaneIds.add('primary_loop_lane');
@@ -33470,6 +33549,7 @@ function updateEnemyCombatRuntime(dt = 0) {
         : pattern;
     },
     spawnProjectile(enemy, projectileOptions) {
+      if (enemy.__bsSpawnEntryPending) return;
       const isMusicalProjectileFormation = (
         String(enemy?.combatProfileId || '').trim().toLowerCase() === 'gunner'
         && String(enemy?.combatSyncGroupId || '').trim().length > 0
@@ -33498,6 +33578,7 @@ function updateEnemyCombatRuntime(dt = 0) {
       });
     },
     spawnHazard(enemy, pattern, attackBeatIndex, attackTiming = null) {
+      if (enemy.__bsSpawnEntryPending) return;
       const attackKind = String(pattern?.attackKind || '').trim().toLowerCase();
       if (attackKind === 'shape') {
         enemyShapeRuntime.spawn({
@@ -35246,30 +35327,26 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar, memberCount 
   const spec = createDirectorMusicalFormationSpec(kind, groupId, startBeat, variantIndex, memberCount, energyState);
   if (enemies.length + spec.count > Math.max(1, Math.trunc(Number(ENEMY_CAP) || 1))) return null;
   const centerWorld = arenaCenterWorld || getViewportCenterWorld();
-  const centerScreen = worldToScreen(centerWorld) || {
-    x: Math.max(1, window.innerWidth) * 0.5,
-    y: Math.max(1, window.innerHeight) * 0.5,
-  };
-  const radiusLogical = Math.min(
-    spec.maxRadiusPx,
-    Math.max(spec.minRadiusPx, 900 * spec.radiusScale),
-  );
-  const radiusPx = projectBeatSwarmLogicalSpawnLength(radiusLogical);
-  const spawnRadius = radiusPx + projectBeatSwarmLogicalSpawnLength(360);
+  const scale = getBeatSwarmCameraScale();
+  const radiusLogical = Math.min(spec.maxRadiusPx, Math.max(spec.minRadiusPx, 900 * spec.radiusScale));
+  const radiusWorld = radiusLogical / scale;
+  const spawnRadiusWorld = (radiusLogical + 360) / scale;
+  const layout = Array.from({length:spec.count},(_,index)=>{
+    const angle = spec.startAngle + Math.PI*2*index/spec.count;
+    return { x:centerWorld.x+Math.cos(angle)*spawnRadiusWorld, y:centerWorld.y+Math.sin(angle)*spawnRadiusWorld,
+      radiusWorld:ENEMY_SPAWN_RADIUS_LOGICAL.large/scale, angle,
+      anchorWorld:{x:centerWorld.x+Math.cos(angle)*radiusWorld,y:centerWorld.y+Math.sin(angle)*radiusWorld} };
+  });
+  const entryPlan = stageBeatSwarmFormation(layout,getCurrentSpawnWorldRect());
   const survivalHp = Math.max(1, Math.ceil(getDirectorMusicalFormationSurvivalHealth(8) * 0.2));
   const created = [];
   for (let index = 0; index < spec.count; index += 1) {
-    const formationAngle = spec.startAngle + ((Math.PI * 2 * index) / spec.count);
-    const anchorScreen = {
-      x: centerScreen.x + (Math.cos(formationAngle) * radiusPx),
-      y: centerScreen.y + (Math.sin(formationAngle) * radiusPx),
-    };
-    const spawnScreen = {
-      x: centerScreen.x + (Math.cos(formationAngle) * spawnRadius),
-      y: centerScreen.y + (Math.sin(formationAngle) * spawnRadius),
-    };
-    const anchorWorld = screenToWorld(anchorScreen);
-    const enemy = spawnEnemyAt(spawnScreen.x, spawnScreen.y, {
+    const placed = entryPlan.points[index];
+    const formationAngle = placed.angle;
+    const anchorWorld = placed.anchorWorld;
+    const logical = projectBeatSwarmWorldToLogical(placed);
+    const enemy = spawnEnemyAtLogical(logical, {
+      spawnPlacement: 'authored',
       hp: survivalHp,
       skipMusicGroupInit: true,
       role: BEAT_EVENT_ROLES.MOTION,
@@ -35316,6 +35393,7 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar, memberCount 
     for (const enemy of created) removeEnemy(enemy, 'director_formation_spawn_incomplete');
     return null;
   }
+  recordBeatSwarmSpawnEntry(entryPlan,created,'director:'+spec.kind,groupId);
   applyDirectorEnemyCombatGroupMotifPlan(groupId, spec.plan, startBeat);
   for (const enemy of created) enemy.combatEnabled = true;
   const group = {
@@ -36564,9 +36642,11 @@ function spawnComposerGroupEnemyAt(clientX, clientY, group, memberIndex = 0, mem
   }
   return created;
 }
-function spawnComposerGroupEnemyAtLogical(logicalX, logicalY, group, memberIndex = 0, memberCount = 1) {
-  const screen = projectBeatSwarmLogicalSpawnPoint({ x: logicalX, y: logicalY });
-  return screen ? spawnComposerGroupEnemyAt(screen.x, screen.y, group, memberIndex, memberCount) : null;
+function spawnComposerGroupEnemyAtLogical(logicalX, logicalY, group, memberIndex = 0, memberCount = 1, spawnPlacement = 'offscreen') {
+  return spawnOffscreenLogicalEnemy({x:logicalX,y:logicalY},{spawnPlacement},logical=>{
+    const screen = projectBeatSwarmLogicalSpawnPoint(logical);
+    return screen ? spawnComposerGroupEnemyAt(screen.x,screen.y,group,memberIndex,memberCount) : null;
+  },'composer:single',ENEMY_SPAWN_RADIUS_LOGICAL.large);
 }
 function spawnComposerGroupOffscreenMembers(group, count = 1, options = null) {
   const opts = options && typeof options === 'object' ? options : {};
@@ -36705,14 +36785,35 @@ function spawnComposerGroupOffscreenMembers(group, count = 1, options = null) {
     ? mandatoryCount + optionalAllowed
     : requestedCount;
   if (admittedCount <= 0) return 0;
+  const pending = [];
   spawnComposerGroupOffscreenMembersRuntime({
     group,
     count: admittedCount,
     getRandomOffscreenSpawnPoint,
-    spawnComposerGroupEnemyAt: spawnComposerGroupEnemyAtLogical,
+    spawnComposerGroupEnemyAt: (x,y,_group,index,total)=>pending.push({x,y,index,total}),
     logicalToWorld: (point) => beatSwarmViewportProjection?.logicalToWorld?.(point),
     worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
   });
+  const radiusWorld = ENEMY_SPAWN_RADIUS_LOGICAL.large / getBeatSwarmCameraScale();
+  const layout = pending.map(p=>({...projectBeatSwarmLogicalToWorld(p),radiusWorld}));
+  if (layout.length) {
+    // Required lane handoffs are explicitly independent quadrant entrances, not a shared geometric formation.
+    const plans = group?.basicLaneCarrierHandoff === true
+      ? layout.map(point=>stageBeatSwarmFormation([point],getCurrentSpawnWorldRect()))
+      : [stageBeatSwarmFormation(layout,getCurrentSpawnWorldRect())];
+    if (group?.behavioralFormationArchetype === 'advancing_line' && group?.basicLaneCarrierHandoff !== true) {
+      group.behavioralFormationPathOriginWorldX += plans[0].offset.x;
+      group.behavioralFormationPathOriginWorldY += plans[0].offset.y;
+    }
+    plans.forEach((plan,planIndex)=>{
+      const created = plan.points.map((point,index)=>{
+        const item = pending[group?.basicLaneCarrierHandoff === true ? planIndex : index];
+        const logical = projectBeatSwarmWorldToLogical(point);
+        return spawnComposerGroupEnemyAtLogical(logical.x,logical.y,group,item.index,item.total,'authored');
+      });
+      recordBeatSwarmSpawnEntry(plan,created,'composer:'+String(group.formationArchetype||group.behavioralFormationArchetype||'group'),group.id);
+    });
+  }
   return admittedCount;
 }
 function getAliveEnemiesByIds(idSet) {
@@ -39561,6 +39662,7 @@ function tick(nowMs) {
     withBeatSwarmPerfSample('updateEnemies', () => updateEnemies(dt));
   }
   withBeatSwarmPerfSample('directorMusicalFormations', () => updateDirectorMusicalFormationLayer(!!weaponGateFrameRuntime));
+  updateBeatSwarmSpawnEntries();
   withBeatSwarmPerfSample('enemyCombat', () => updateEnemyCombatRuntime(dt));
   withBeatSwarmPerfSample('enemyLasers', () => updateEnemyLaserRuntime(dt));
   withBeatSwarmPerfSample('enemyShapes', () => updateEnemyShapeRuntime());
@@ -39762,6 +39864,7 @@ function bindInput() {
   bindBeatSwarmInputRuntimeWrapper({ targets: { overlayEl, document, window }, handlers: { onPointerDown, onPointerMove, onPointerUp, onKeyDown, onWheel, onTransportPause, onTransportResume, onMusicSystemEvent: handleBeatSwarmMusicSystemEvent } });
   updateBeatSwarmResizeAnchor();
   bindBeatSwarmResizeHandler();
+  snapCameraToWorld(getViewportCenterWorld(), getBeatSwarmCameraScale());
 }
 function unbindInput() {
   unbindBeatSwarmViewportSpaceProjection();
@@ -39799,6 +39902,7 @@ export function enterBeatSwarmMode(options = null) {
       : (requestedWeaponGateSequence === 'missiles_bouncers' ? 'missiles_bouncers' : 'tap_orbs_missiles'));
   if (active) {
     if (enterOptions.weaponGateIntro === true) {
+      if (weaponGateOnboardingSequenceMode === 'missiles_bouncers') clearIncrementalOnboardingThemes();
       resetWeaponGateTapOrbOnboardingState();
       clearEnemies();
       clearPickups();
@@ -39816,7 +39920,17 @@ export function enterBeatSwarmMode(options = null) {
   beatSwarmPreviousSoundThemeKey = String(getSoundThemeKey?.() || '').trim();
   try { setSoundThemeKey(BEAT_SWARM_THEME_ID); } catch {}
   enterBeatSwarmThemeOverride(restoreState);
+  // A fresh main-flow run is a composition reset; stage handoffs never use this path.
+  if (enterOptions.weaponGateIntro === true && weaponGateOnboardingSequenceMode === 'missiles_bouncers' && !restoreState) {
+    clearIncrementalOnboardingThemes();
+  }
   enterBeatSwarmTempo(restoreState);
+  beatSwarmSpawnEntries.length = 0;
+  beatSwarmPreviousBoardView = getBoardZoomState();
+  beatSwarmPreviousTransportRunning = !!isRunning();
+  beatSwarmPlayerWorldPosition = null;
+  beatSwarmCameraScale = SWARM_CAMERA_TARGET_SCALE;
+  musicInteractionCameraHoldUntilMs = 0;
   active = true;
   resetMusicLaneFocusRuntime();
   dragPointerId = null;
@@ -40195,6 +40309,10 @@ export function exitBeatSwarmMode() {
   } = exitState);
   exitBeatSwarmThemeOverride();
   exitBeatSwarmTempoRestore();
+  const view = beatSwarmPreviousBoardView;
+  beatSwarmPreviousBoardView = null;
+  if (view) window.__setBoardViewportNow?.(view.targetScale, view.targetX, view.targetY);
+  if (!beatSwarmPreviousTransportRunning) stopTransport();
   return true;
 }
 export function isBeatSwarmModeActive() {
@@ -40202,6 +40320,32 @@ export function isBeatSwarmModeActive() {
 }
 export const BeatSwarmMode = {
   enter: enterBeatSwarmMode,
+  reset() {
+    const running = !!isRunning();
+    exitBeatSwarmMode();
+    enterBeatSwarmMode({ weaponGateIntro: true, weaponGateSequence: 'missiles_bouncers' });
+    if (running) startTransport();
+  },
+  getSpawnEntryDiagnostics: () => JSON.parse(JSON.stringify(beatSwarmSpawnEntries.map(entry=>{
+    const members = enemies.filter(e=>entry.memberIds.includes(e.id));
+    return {...entry,currentVisibleRect:getCurrentSpawnWorldRect(),currentBounds:members.length?getSpawnFormationBounds(members.flatMap(e=>getEntryEnemyPoints(e))):null};
+  }))),
+  getGameplaySnapshot() {
+    const gate = weaponGateIntroRuntime.getState?.();
+    return {
+      active, gameplayPaused, playerWorld: getViewportCenterWorld(), cameraScale: getBeatSwarmCameraScale(),
+      corridor: gate ? { phase: gate.phase, progress: gate.progress, y: gate.y, nextGateIndex: gate.nextGateIndex, selections: gate.selections } : null,
+      steeringPointer: dragPointerId, projectileCount: projectiles.length, enemyCount: enemies.length, rafActive: !!rafId,
+      music: getMusicContributionSnapshot(),
+      authoredLayers: {
+        weapon: getWeaponTuneActivityStats(0),
+        foundation: getPlayerThemeAuthoredStepCount('foundation_lane'),
+        accent: getPlayerThemeAuthoredStepCount('secondary_loop_lane'),
+        lead: getPlayerThemeAuthoredStepCount('primary_loop_lane'),
+      },
+      targets: enemies.filter(e => Number(e.hp) > 0).map(e => ({ world: { x: e.wx, y: e.wy }, rocketCarrier: e.musicMissileCarrier === true, leadCarrier: e.leadBallCarrier === true })),
+    };
+  },
   exit: exitBeatSwarmMode,
   isActive: isBeatSwarmModeActive,
   isSubBoardOpen: isBeatSwarmSubBoardOpen,

@@ -1,0 +1,327 @@
+{
+  "measurements": [
+    {
+      "width": 1600,
+      "height": 900,
+      "removalReason": "max_range",
+      "kind": "standard",
+      "logicalPosition": {
+        "x": 36.706666666666365,
+        "y": 450
+      },
+      "worldPosition": {
+        "x": 6146.115942028985,
+        "y": 702.4876075536002
+      },
+      "projectedScreenPosition": {
+        "x": 36.706666666666365,
+        "y": 450
+      },
+      "logicalGameplayBounds": {
+        "left": 0,
+        "top": 0,
+        "right": 1600,
+        "bottom": 900,
+        "width": 1600,
+        "height": 900
+      },
+      "activeLifetimeMarginLogical": 72,
+      "enteredGameplay": true,
+      "presentationScale": 1,
+      "ttl": -0.04960000000000225,
+      "spawnWorld": {
+        "x": 4056.1159420289855,
+        "y": 702.4876075536002
+      },
+      "distanceTravelled": 2090,
+      "maxRangeWorld": 2090
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "removalReason": "max_range",
+      "kind": "standard",
+      "logicalPosition": {
+        "x": 97.50666666666712,
+        "y": 450
+      },
+      "worldPosition": {
+        "x": 12027.855072463775,
+        "y": 702.4876075536002
+      },
+      "projectedScreenPosition": {
+        "x": 257.5066666666671,
+        "y": 540
+      },
+      "logicalGameplayBounds": {
+        "left": 0,
+        "top": 0,
+        "right": 1600,
+        "bottom": 900,
+        "width": 1600,
+        "height": 900
+      },
+      "activeLifetimeMarginLogical": 72,
+      "enteredGameplay": true,
+      "presentationScale": 1,
+      "ttl": -0.03299999999999914,
+      "spawnWorld": {
+        "x": 9937.855072463775,
+        "y": 702.4876075536002
+      },
+      "distanceTravelled": 2090,
+      "maxRangeWorld": 2090
+    },
+    {
+      "width": 1000,
+      "height": 900,
+      "removalReason": "max_range",
+      "kind": "standard",
+      "logicalPosition": {
+        "x": 196.8133333333352,
+        "y": 450
+      },
+      "worldPosition": {
+        "x": 17891.971014492756,
+        "y": 702.4876075536002
+      },
+      "projectedScreenPosition": {
+        "x": 123.0083333333345,
+        "y": 450
+      },
+      "logicalGameplayBounds": {
+        "left": 0,
+        "top": 0,
+        "right": 1600,
+        "bottom": 900,
+        "width": 1600,
+        "height": 900
+      },
+      "activeLifetimeMarginLogical": 72,
+      "enteredGameplay": true,
+      "presentationScale": 0.625,
+      "ttl": -0.01650000000000272,
+      "spawnWorld": {
+        "x": 15801.971014492756,
+        "y": 702.4876075536002
+      },
+      "distanceTravelled": 2090,
+      "maxRangeWorld": 2090
+    }
+  ],
+  "played": [
+    {
+      "completed": [],
+      "lead": 0
+    },
+    {
+      "current": "foundation-rockets-2",
+      "completed": [
+        "foundation-rockets-1"
+      ],
+      "lead": 0
+    },
+    {
+      "current": "foundation-rockets-2",
+      "completed": [
+        "foundation-rockets-1"
+      ],
+      "lead": 0
+    },
+    {
+      "current": "foundation-rockets-2",
+      "completed": [
+        "foundation-rockets-1"
+      ],
+      "lead": 0
+    },
+    {
+      "completed": [
+        "foundation-rockets-1",
+        "foundation-rockets-2",
+        "accent-bouncer-1"
+      ],
+      "lead": 0
+    },
+    {
+      "current": "lead-ball-1",
+      "completed": [
+        "foundation-rockets-1",
+        "foundation-rockets-2",
+        "accent-bouncer-1",
+        "accent-bouncer-2"
+      ],
+      "lead": 0
+    },
+    {
+      "current": "lead-ball-1",
+      "completed": [
+        "foundation-rockets-1",
+        "foundation-rockets-2",
+        "accent-bouncer-1",
+        "accent-bouncer-2"
+      ],
+      "lead": 8
+    },
+    {
+      "current": "lead-ball-1",
+      "completed": [
+        "foundation-rockets-1",
+        "foundation-rockets-2",
+        "accent-bouncer-1",
+        "accent-bouncer-2"
+      ],
+      "lead": 8
+    },
+    {
+      "current": "lead-ball-1",
+      "completed": [
+        "foundation-rockets-1",
+        "foundation-rockets-2",
+        "accent-bouncer-1",
+        "accent-bouncer-2"
+      ],
+      "lead": 8
+    }
+  ],
+  "final": {
+    "active": true,
+    "gameplayPaused": false,
+    "playerWorld": {
+      "x": 45421.87063459302,
+      "y": -15.370874591054552
+    },
+    "cameraScale": 0.4595287940655008,
+    "corridor": null,
+    "steeringPointer": null,
+    "projectileCount": 2,
+    "enemyCount": 12,
+    "rafActive": true,
+    "music": {
+      "active": false,
+      "current": null,
+      "queue": [],
+      "nextEligibleStep": 568,
+      "completedIds": [
+        "foundation-rockets-1",
+        "foundation-rockets-2",
+        "accent-bouncer-1",
+        "accent-bouncer-2",
+        "lead-ball-1"
+      ],
+      "completedLaneIds": [
+        "foundation_lane",
+        "secondary_loop_lane",
+        "primary_loop_lane"
+      ],
+      "protection": []
+    },
+    "authoredLayers": {
+      "weapon": {
+        "activeNotes": 10,
+        "totalNotes": 16
+      },
+      "foundation": 4,
+      "accent": 2,
+      "lead": 8
+    },
+    "targets": [
+      {
+        "world": {
+          "x": 46386.30916365786,
+          "y": 520.3929549310584
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 46654.04392533953,
+          "y": 460.5825719647861
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 43950.252116798896,
+          "y": 403.5508587769588
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 46613.802910672886,
+          "y": 377.0363233565245
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 45985.429506170054,
+          "y": -35.10095837334436
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 45925.41988799162,
+          "y": 233.5322085170036
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 46055.898840906775,
+          "y": 234.3498108403023
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 46001.42079478602,
+          "y": 356.201344496592
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 43890.272762892535,
+          "y": 107.55533439040335
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 44580.037217171426,
+          "y": -290.7108260006352
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 44749.890852093195,
+          "y": -497.85404003276756
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      },
+      {
+        "world": {
+          "x": 47173.48495334412,
+          "y": 1.9466247487138442
+        },
+        "rocketCarrier": false,
+        "leadCarrier": false
+      }
+    ]
+  }
+}

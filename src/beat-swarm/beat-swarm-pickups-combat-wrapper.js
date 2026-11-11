@@ -33,6 +33,8 @@ export function updatePickupsAndCombatRuntimeWrapper(options = null) {
       ensureDefaultWeaponFromLegacy: helpers.ensureDefaultWeaponFromLegacy,
       worldToScreen: helpers.worldToScreen,
       worldToLogical: helpers.worldToLogical,
+      getLogicalGameplayBounds: helpers.getLogicalGameplayBounds,
+      recordProjectileRemovalDiagnostic: helpers.recordProjectileRemovalDiagnostic,
       isWorldPointInsideGameplay: helpers.isWorldPointInsideGameplay,
       getNearestEnemy: helpers.getNearestEnemy,
       normalizeDir: helpers.normalizeDir,
